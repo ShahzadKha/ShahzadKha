@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AlertTriangle, ArrowLeft, Bot, CheckCircle2, Circle, ExternalLink, FileText, Link2, Loader2, Mail, MapPin, Phone, RefreshCw, ShieldCheck } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Download, Bot, CheckCircle2, Circle, ExternalLink, FileText, Link2, Loader2, Mail, MapPin, Phone, RefreshCw, ShieldCheck } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { getScoringRules } from "@/lib/settings";
@@ -17,6 +17,7 @@ import { NurtureCard } from "@/components/nurture-card";
 import { ClosingCard } from "@/components/closing-card";
 import { DeleteCandidate } from "@/components/delete-candidate";
 import { EditCandidate } from "@/components/edit-candidate";
+import { ManualEmail } from "@/components/manual-email";
 import { changeStatus } from "@/app/actions/nurture";
 import { STATUS_ORDER } from "@/lib/pipeline";
 
@@ -213,6 +214,8 @@ export default async function CandidatePage({ params }: PageProps<"/candidates/[
 
           {c.eligible && <NurtureCard candidate={c} t={t} locale={locale} />}
 
+          <ManualEmail candidateId={c.id} unsubscribed={Boolean(c.unsubscribedAt)} t={t.manualEmail} saved={t.settings.saved} />
+
           <Card title={t.profile.cv}>
             <dl className="grid gap-4 text-sm sm:grid-cols-2">
               <div>
@@ -297,8 +300,15 @@ export default async function CandidatePage({ params }: PageProps<"/candidates/[
                 <span className="text-xs text-slate-500">{t.profile.assignedSdr} : </span>
                 {c.assignedSdr?.name ?? <span className="text-slate-400">{t.profile.unassigned}</span>}
               </li>
-              {user.role === "ADMIN" && (
+              {user.role !== "SDR" && (
                 <li className="border-t border-slate-100 pt-3">
+                  <a href={`/api/candidates/${c.id}/data`} className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-slate-900">
+                    <Download className="size-3.5" /> {t.gdpr.export}
+                  </a>
+                </li>
+              )}
+              {user.role === "ADMIN" && (
+                <li className="pt-1">
                   <DeleteCandidate candidateId={c.id} label={t.profile.delete} confirmText={t.profile.deleteConfirm} />
                 </li>
               )}

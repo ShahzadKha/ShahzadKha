@@ -14,6 +14,8 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/desinscription/") ||
     pathname.startsWith("/paiement/") ||
     pathname.startsWith("/avis/") ||
+    pathname === "/forgot-password" ||
+    pathname.startsWith("/reset-password/") ||
     pathname.startsWith("/api/webhooks/") ||
     pathname.startsWith("/api/t/") ||
     pathname.startsWith("/api/cron/")

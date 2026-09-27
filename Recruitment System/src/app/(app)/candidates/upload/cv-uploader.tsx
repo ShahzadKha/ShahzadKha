@@ -28,7 +28,7 @@ type Row = {
 };
 
 const SOURCES = ["FILE_DROP", "EMAIL", "CSV_IMPORT"] as const;
-const ACCEPT = ".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain";
+const ACCEPT = ".pdf,.docx,.txt,.jpg,.jpeg,.png,.webp,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,image/jpeg,image/png,image/webp";
 
 export function CvUploader({ t, aiLabel }: { t: Labels; aiLabel: string }) {
   const [rows, setRows] = useState<Row[]>([]);

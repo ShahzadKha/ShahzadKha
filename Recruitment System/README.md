@@ -18,6 +18,8 @@ while keeping the same steps, statuses and routing rules.
 
 | 6 | Completeness review against the diagram: inbox reading (CVs by email + candidate replies), CSV import, Acumbamail sync, recycling, referral leads, SDR email alerts, platform link, candidate editing, bulk actions, Integrations page, embeddable form with partner tracking | ✅ Done |
 
+| 7 | Daily-use review: forgot password by email, scanned CVs and photos read by OpenAI, personal emails from the profile, GDPR retention and data export, list sorting, email previews, watched-folder guide | ✅ Done |
+
 **Presenting to the client?** Follow [DEMO_SCRIPT.md](DEMO_SCRIPT.md), a 15-minute walkthrough of the whole journey.
 
 ## Tech stack
@@ -127,7 +129,8 @@ If an OpenAI call fails, the candidate shows "L'analyse a échoué" with the err
 |--------|---------------|
 | Incoming email | The **mailbox** is read automatically (IMAP): an email with a CV attached creates the candidate. If the CV has no email address, the sender's is used |
 | Web form (landing page) | Public page at **`/apply`**, no login. Candidate fills in details, uploads a CV and gives GDPR consent. `?ref=skillhubs` records where they came from; `?embed=1` gives a compact version to put in an `<iframe>` on the landing page |
-| CV drop | **Candidats → Importer des CV**: drag and drop several PDF, Word (.docx) or text files |
+| CV drop | **Candidats → Importer des CV**: drag and drop several PDF, Word (.docx) or text files. **Scanned CVs and photos** (JPG, PNG) are read by OpenAI when a key is set; without a key the app says so clearly |
+| Watched folder (Google Drive, Dropbox…) | No code: an Activepieces / Zapier / Make automation "new file in folder" → the import API (guide on the Intégrations page) |
 | Partner / job board file | Same page, **Importer un fichier CSV**: one row per candidate (template provided), with the partner name |
 | Manual entry | **Candidats → Ajouter un candidat** |
 | Automations (email inbox, job boards, Activepieces, n8n…) | **`POST /api/intake`**, see below |
@@ -254,6 +257,10 @@ Acumbamail's API documentation: check it once with the client's account.
 
 ## Working with candidates
 
+- **Sort** the list by newest, oldest, best score, name or latest activity (the CSV export follows it).
+- **Write to a candidate** (profile → *Écrire au candidat*): a personal email with the template
+  variables, tracked like the others; the unsubscribe link is added automatically. Not possible for
+  unsubscribed candidates.
 - **Edit a record** (profile → *Modifier la fiche*): contact details, job title, start date,
   partner, and the **recommended training** (e.g. the candidate prefers another course).
 - **Bulk actions** on the candidate list: tick candidates, then run the AI analysis, start the
@@ -287,8 +294,14 @@ won, lost and not-eligible candidates. The status can also be changed from the c
 - **Utilisateurs** (admin): add users with a temporary password, change roles, reset passwords,
   deactivate accounts (their open calls are released). The last active admin cannot be removed.
 - **Mon compte**: anyone can change their own password (click your name in the sidebar).
+- **Mot de passe oublié** on the login page: a one-time link by email, valid 1 hour (needs real email
+  sending; otherwise the page asks to contact an administrator). Using it also lifts a login lockout.
 - **Export (CSV)** on the candidate list, with the current filters (opens in Excel).
 - **GDPR deletion**: admins can delete a candidate with their CV, emails, calls, payments and history.
+- **GDPR access**: *Exporter ses données* on the profile downloads everything stored about the person (JSON).
+- **GDPR retention** (Settings): optionally delete candidates with no activity for N months, every day.
+  Customers are never deleted automatically; the page shows how many would be deleted today.
+- **Email previews** on the Séquences page show each email with a real candidate's data.
 
 ## Security
 

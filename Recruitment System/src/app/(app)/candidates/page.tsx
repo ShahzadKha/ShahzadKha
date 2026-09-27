@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { getDictionary } from "@/lib/i18n";
 import { STATUS_ORDER } from "@/lib/pipeline";
-import { candidateFilters } from "@/lib/candidate-filters";
+import { SORTS, candidateFilters } from "@/lib/candidate-filters";
 import { BulkToolbar, SelectAll } from "./bulk-toolbar";
 import { TRACKS, trackRangeLabel } from "@/lib/rules";
 import { getScoringRules } from "@/lib/settings";
@@ -24,14 +24,14 @@ export default async function CandidatesPage({ searchParams }: PageProps<"/candi
   const params = await searchParams;
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
 
-  const { where, q, status, source, track } = candidateFilters(params);
+  const { where, q, status, source, track, sort, orderBy } = candidateFilters(params);
   const page = Math.max(1, Number(one(params.page)) || 1);
 
   const [total, candidates] = await Promise.all([
     db.candidate.count({ where }),
     db.candidate.findMany({
       where,
-      orderBy: { createdAt: "desc" },
+      orderBy,
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
       include: {
@@ -43,13 +43,14 @@ export default async function CandidatesPage({ searchParams }: PageProps<"/candi
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const canBulk = user.role !== "SDR";
 
-  const filterQuery = new URLSearchParams(Object.entries({ q, status, source, track }).filter(([, v]) => v)).toString();
+  const filterQuery = new URLSearchParams(Object.entries({ q, status, source, track, sort: sort === "recent" ? "" : sort }).filter(([, v]) => v)).toString();
   const pageHref = (p: number) => {
     const sp = new URLSearchParams();
     if (q) sp.set("q", q);
     if (status) sp.set("status", status);
     if (source) sp.set("source", source);
     if (track) sp.set("track", track);
+    if (sort !== "recent") sp.set("sort", sort);
     sp.set("page", String(p));
     return `/candidates?${sp}`;
   };
@@ -99,6 +100,11 @@ export default async function CandidatesPage({ searchParams }: PageProps<"/candi
             <option key={tr} value={tr}>{trackRangeLabel(tr, rules)} · {t.tracks[tr]}</option>
           ))}
           <option value="none">{t.candidates.notAnalyzed}</option>
+        </select>
+        <select name="sort" defaultValue={sort} className={selectClass} aria-label={t.candidates.sort}>
+          {SORTS.map((o) => (
+            <option key={o} value={o}>{t.candidates.sort} : {t.candidates.sorts[o]}</option>
+          ))}
         </select>
         <button type="submit" className={buttonClass.secondary}>{t.candidates.filter}</button>
         {(q || status || source || track) && (

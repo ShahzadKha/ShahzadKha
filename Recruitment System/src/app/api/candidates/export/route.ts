@@ -21,10 +21,10 @@ function cell(v: unknown) {
 export async function GET(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user || user.role === "SDR") return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  const { where } = candidateFilters(Object.fromEntries(request.nextUrl.searchParams));
+  const { where, orderBy } = candidateFilters(Object.fromEntries(request.nextUrl.searchParams));
   const rows = await db.candidate.findMany({
     where,
-    orderBy: { createdAt: "desc" },
+    orderBy,
     include: { recommendedProduct: { select: { name: true, price: true } }, assignedSdr: { select: { name: true } } },
   });
   const lines = [

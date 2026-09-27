@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Bot, CalendarClock, CreditCard, FileInput, Globe, Inbox, Mail, Users } from "lucide-react";
+import { Bot, CalendarClock, CreditCard, FileInput, FolderSync, Globe, Inbox, Mail, Users } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { getDictionary } from "@/lib/i18n";
@@ -98,6 +98,11 @@ export default async function IntegrationsPage() {
         <Integration icon={<FileInput className="size-5" />} title={g.api} step={g.apiStep} on={Boolean(process.env.INTAKE_API_KEY)} status={on(Boolean(process.env.INTAKE_API_KEY))}>
           <p className="text-xs text-slate-500">{g.apiHelp}</p>
           <Code>{`curl -X POST ${base}/api/intake \\\n  -H "Authorization: Bearer $INTAKE_API_KEY" \\\n  -F "file=@cv.pdf" -F "source=CSV_IMPORT" -F "sourceDetail=Indeed"`}</Code>
+        </Integration>
+
+        <Integration icon={<FolderSync className="size-5" />} title={g.folder} step={g.folderStep} on={Boolean(process.env.INTAKE_API_KEY)} status={process.env.INTAKE_API_KEY ? g.on : g.off}>
+          <p className="text-xs text-slate-500">{g.folderHelp}</p>
+          <Code>{`POST ${base}/api/intake\nAuthorization: Bearer $INTAKE_API_KEY\nfile=<le fichier>  source=FILE_DROP  sourceDetail=Google Drive`}</Code>
         </Integration>
 
         <Integration icon={<Globe className="size-5" />} title={g.form} step={g.formStep} on status={g.on}>

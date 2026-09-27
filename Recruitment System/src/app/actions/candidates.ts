@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { normalizePhone } from "@/lib/engine/parse";
+import { sendEmail } from "@/lib/nurture/engine";
 import type { SettingsState } from "@/app/actions/settings";
 
 const optional = z
@@ -157,4 +158,27 @@ export async function updateCandidate(candidateId: string, _prev: SettingsState,
   });
   revalidatePath(`/candidates/${candidateId}`);
   return { ok: true, at: Date.now() };
+}
+
+// A personal email written by a team member from the profile
+export async function sendManualEmail(candidateId: string, _prev: SettingsState, formData: FormData): Promise<SettingsState> {
+  const user = await requireUser();
+  const subject = String(formData.get("subject") ?? "").trim().slice(0, 200);
+  const body = String(formData.get("body") ?? "").trim().slice(0, 5000);
+  if (!subject || !body) return { ok: false, at: Date.now() };
+  const c = await db.candidate.findUnique({ where: { id: candidateId }, select: { unsubscribedAt: true } });
+  if (!c || c.unsubscribedAt) return { ok: false, at: Date.now() };
+  const message = await sendEmail(candidateId, { subject, body }, { kind: "manual", log: false });
+  if (!message) return { ok: false, at: Date.now() };
+  await db.candidateEvent.create({
+    data: {
+      candidateId,
+      type: "MANUAL_EMAIL",
+      title: "Email personnel",
+      detail: message.error ? `${message.subject} — échec : ${message.error}` : message.subject,
+      actorId: user.id,
+    },
+  });
+  revalidatePath(`/candidates/${candidateId}`);
+  return { ok: !message.error, at: Date.now() };
 }

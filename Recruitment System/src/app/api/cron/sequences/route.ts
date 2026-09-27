@@ -1,11 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { processDueEmails } from "@/lib/nurture/engine";
 import { imapConfigured, pollInbox } from "@/lib/inbound/imap";
+import { applyRetention } from "@/lib/gdpr/retention";
 
 export const maxDuration = 300;
 
 // Called by the scheduler (Vercel Cron, see vercel.json, or any external cron service):
-// reads the inbox (new CVs and replies), then sends the emails that are due.
+// reads the inbox (new CVs and replies), sends the emails that are due, applies GDPR retention.
 // Vercel sends "Authorization: Bearer <CRON_SECRET>" automatically when CRON_SECRET is set.
 export async function GET(request: NextRequest) {
   const secret = process.env.CRON_SECRET;
@@ -21,5 +22,6 @@ export async function GET(request: NextRequest) {
     }
   }
   const processed = await processDueEmails();
-  return NextResponse.json({ processed, inbox });
+  const deleted = await applyRetention();
+  return NextResponse.json({ processed, inbox, retentionDeleted: deleted });
 }

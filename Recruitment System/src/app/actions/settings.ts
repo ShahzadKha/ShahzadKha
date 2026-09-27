@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { ScoringRulesSchema } from "@/lib/rules";
+import { RetentionSettingsSchema } from "@/lib/settings";
 
 export type SettingsState = { ok: boolean; at: number } | undefined;
 
@@ -82,6 +83,15 @@ export async function saveProduct(_prev: SettingsState, formData: FormData): Pro
   const values = { ...data, description: data.description || null };
   if (id) await db.product.update({ where: { id }, data: values });
   else await db.product.create({ data: values });
+  revalidatePath("/settings");
+  return { ok: true, at: Date.now() };
+}
+
+export async function saveRetention(_prev: SettingsState, formData: FormData): Promise<SettingsState> {
+  await requireUser(["ADMIN"]);
+  const parsed = RetentionSettingsSchema.safeParse({ enabled: formData.get("enabled") === "on", months: Number(formData.get("months")) });
+  if (!parsed.success) return { ok: false, at: Date.now() };
+  await db.setting.upsert({ where: { key: "retentionSettings" }, create: { key: "retentionSettings", value: parsed.data }, update: { value: parsed.data } });
   revalidatePath("/settings");
   return { ok: true, at: Date.now() };
 }

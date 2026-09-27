@@ -78,7 +78,7 @@ export function ApplyForm({ t, ref_ }: { t: Labels; ref_?: string }) {
           name="cv"
           type="file"
           required
-          accept=".pdf,.docx,.txt"
+          accept=".pdf,.docx,.txt,.jpg,.jpeg,.png,.webp"
           className="sr-only"
           onChange={(e) => setFileName(e.target.files?.[0]?.name ?? null)}
         />

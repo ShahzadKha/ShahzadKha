@@ -99,6 +99,7 @@ enum EventType {
   SDR_ASSIGNED
   CALL_LOGGED
   REFERRAL_CREATED
+  MANUAL_EMAIL
   PAYMENT_LINK_SENT
   PAYMENT_CONFIRMED
   FEEDBACK_RECEIVED
@@ -392,4 +393,16 @@ model InboundEmail {
   candidateId String?
 
   @@index([processedAt])
+}
+
+// "Mot de passe oublié": one-time link sent by email, valid 1 hour
+model PasswordReset {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique // SHA-256 of the token; the token itself is only in the email
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
 }

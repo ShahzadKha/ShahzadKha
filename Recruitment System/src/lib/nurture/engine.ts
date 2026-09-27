@@ -63,7 +63,7 @@ async function templateVars(candidateId: string): Promise<{ vars: TemplateVars; 
 export async function sendEmail(
   candidateId: string,
   template: { subject: string; body: string },
-  meta: { stepId?: string; kind: "sequence" | "offer" | "payment" },
+  meta: { stepId?: string; kind: "sequence" | "offer" | "payment" | "manual"; log?: boolean },
 ) {
   const ctx = await templateVars(candidateId);
   const candidate = await db.candidate.findUnique({ where: { id: candidateId }, select: { publicToken: true } });
@@ -97,7 +97,9 @@ export async function sendEmail(
     where: { id: message.id },
     data: { subject: email.subject, body: email.text, provider, error },
   });
-  await logEvent(candidateId, "EMAIL_SENT", "Email envoyé", error ? `${email.subject} — échec : ${error}` : email.subject);
+  if (meta.log !== false) {
+    await logEvent(candidateId, "EMAIL_SENT", "Email envoyé", error ? `${email.subject} — échec : ${error}` : email.subject);
+  }
   return { ...message, subject: email.subject, error };
 }
 

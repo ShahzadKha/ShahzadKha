@@ -1,11 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 import { login, type LoginState } from "@/app/actions/auth";
 import { buttonClass, inputClass } from "@/components/ui";
 import type { Dictionary } from "@/lib/i18n/fr";
 
-export function LoginForm({ labels }: { labels: Dictionary["login"] }) {
+export function LoginForm({ labels, forgotLabel }: { labels: Dictionary["login"]; forgotLabel: string }) {
   const [state, action, pending] = useActionState<LoginState, FormData>(login, undefined);
 
   return (
@@ -27,6 +28,7 @@ export function LoginForm({ labels }: { labels: Dictionary["login"] }) {
       <button type="submit" disabled={pending} className={`${buttonClass.primary} w-full justify-center`}>
         {labels.submit}
       </button>
+      <Link href="/forgot-password" className="block text-center text-sm text-indigo-600 hover:text-indigo-500">{forgotLabel}</Link>
     </form>
   );
 }

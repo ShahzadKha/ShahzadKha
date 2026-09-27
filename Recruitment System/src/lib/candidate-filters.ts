@@ -27,5 +27,17 @@ export function candidateFilters(params: Params) {
   if (track === "none") where.globalScore = null;
   else if (track && TRACKS.includes(track)) where.routingTrack = track;
 
-  return { where, q, status, source, track };
+  const sort = (SORTS as readonly string[]).includes(one(params.sort)) ? (one(params.sort) as Sort) : "recent";
+  return { where, q, status, source, track, sort, orderBy: ORDER[sort] };
 }
+
+export const SORTS = ["recent", "oldest", "score", "name", "activity"] as const;
+export type Sort = (typeof SORTS)[number];
+
+const ORDER: Record<Sort, Prisma.CandidateOrderByWithRelationInput[]> = {
+  recent: [{ createdAt: "desc" }],
+  oldest: [{ createdAt: "asc" }],
+  score: [{ globalScore: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
+  name: [{ lastName: "asc" }, { firstName: "asc" }],
+  activity: [{ updatedAt: "desc" }],
+};

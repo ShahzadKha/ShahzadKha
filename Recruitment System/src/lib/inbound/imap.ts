@@ -20,7 +20,7 @@ export function imapConfigured() {
 export type PollResult = { checked: number; cvs: number; replies: number; ignored: number; errors: number };
 
 const isCv = (a: Attachment) =>
-  a.size > 0 && a.size <= MAX_CV_BYTES && (Boolean(ACCEPTED_CV_TYPES[a.contentType]) || /\.(pdf|docx)$/i.test(a.filename ?? ""));
+  a.size > 0 && a.size <= MAX_CV_BYTES && (Boolean(ACCEPTED_CV_TYPES[a.contentType]) || /\.(pdf|docx|jpe?g|png|webp)$/i.test(a.filename ?? ""));
 
 export async function pollInbox(limit = 25): Promise<PollResult> {
   const result: PollResult = { checked: 0, cvs: 0, replies: 0, ignored: 0, errors: 0 };

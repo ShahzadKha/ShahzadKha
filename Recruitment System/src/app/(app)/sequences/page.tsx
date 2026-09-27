@@ -7,6 +7,9 @@ import { TRACKS, trackRangeLabel } from "@/lib/rules";
 import { TEMPLATE_VARIABLES } from "@/lib/nurture/defaults";
 import { emailMode } from "@/lib/nurture/mailer";
 import { ensureDefaultSequences } from "@/lib/nurture/engine";
+import { fill, type TemplateVars } from "@/lib/nurture/render";
+import { appUrl } from "@/lib/nurture/mailer";
+import { getBrand } from "@/lib/settings";
 import { addStep, deleteStep, saveEmailSettings, saveStep, toggleSequence } from "@/app/actions/nurture";
 import { ActionForm } from "@/components/action-form";
 import { Card, PageHeader, inputClass } from "@/components/ui";
@@ -28,6 +31,24 @@ export default async function SequencesPage() {
     getEmailSettings(),
     getScoringRules(),
   ]);
+  // Sample data for the previews: a real candidate with a training, or an example
+  const [sample, brand] = await Promise.all([
+    db.candidate.findFirst({ where: { recommendedProductId: { not: null } }, include: { recommendedProduct: true }, orderBy: { createdAt: "desc" } }),
+    getBrand(),
+  ]);
+  const base = appUrl();
+  const vars: TemplateVars = {
+    prenom: sample?.firstName ?? "Sarah",
+    nom: sample?.lastName ?? "Benali",
+    produit: sample?.recommendedProduct?.name ?? "Formation Data Analyst",
+    prix: `${(sample?.recommendedProduct?.price ?? 2490).toLocaleString("fr-FR")} €`,
+    poste: sample?.currentTitle ?? "Assistante comptable",
+    marque: brand.name,
+    lien_offre: `${base}/offre/…`,
+    lien_paiement: `${base}/paiement/…`,
+    lien_avis: `${base}/avis/…`,
+    lien_plateforme: sample?.recommendedProduct?.platformUrl ?? "https://plateforme…",
+  };
   const byTrack = new Map(sequences.map((q) => [q.track, q]));
   const onboarding = sequences.find((q) => q.kind === "ONBOARDING");
   // Nurture sequences in track order, then the post-purchase one
@@ -168,8 +189,17 @@ export default async function SequencesPage() {
                         </label>
                       </fieldset>
                     </ActionForm>
+                    <details className="mt-3 rounded-md bg-slate-50 text-sm">
+                      <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-indigo-600">
+                        {s.preview} ({vars.prenom})
+                      </summary>
+                      <div className="border-t border-slate-200 px-3 py-2">
+                        <p className="font-medium text-slate-900">{fill(step.subject, vars)}</p>
+                        <pre className="mt-2 whitespace-pre-wrap font-sans text-sm leading-relaxed text-slate-700">{fill(step.body, vars)}</pre>
+                      </div>
+                    </details>
                     {isAdmin && q.steps.length > 1 && (
-                      <form action={deleteStep.bind(null, step.id)} className="absolute bottom-4 left-4">
+                      <form action={deleteStep.bind(null, step.id)} className="mt-2">
                         <SubmitButton className="inline-flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-500">
                           <Trash2 className="size-3.5" /> {s.deleteStep}
                         </SubmitButton>

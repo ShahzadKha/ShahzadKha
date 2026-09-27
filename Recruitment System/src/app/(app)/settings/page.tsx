@@ -2,10 +2,11 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { getDictionary } from "@/lib/i18n";
-import { getBrand, getClosingSettings, getScoringRules } from "@/lib/settings";
+import { getBrand, getClosingSettings, getRetentionSettings, getScoringRules } from "@/lib/settings";
+import { inactiveWhere } from "@/lib/gdpr/retention";
 import { SCRIPT_VARIABLES } from "@/lib/nurture/defaults";
 import { saveClosingSettings } from "@/app/actions/closing";
-import { saveBrand, saveProduct, saveRules } from "@/app/actions/settings";
+import { saveBrand, saveProduct, saveRetention, saveRules } from "@/app/actions/settings";
 import { ActionForm } from "@/components/action-form";
 import { Card, PageHeader, inputClass } from "@/components/ui";
 
@@ -24,13 +25,15 @@ export default async function SettingsPage() {
   await requireUser(["ADMIN"]);
   const { t } = await getDictionary();
   const s = t.settings;
-  const [brand, rules, closing, products] = await Promise.all([
+  const [brand, rules, closing, retention, products] = await Promise.all([
     getBrand(),
     getScoringRules(),
     getClosingSettings(),
+    getRetentionSettings(),
     db.product.findMany({ orderBy: { createdAt: "asc" } }),
   ]);
   const cs = t.closingSettings;
+  const wouldDelete = await db.candidate.count({ where: inactiveWhere(retention.months) });
   const formLabels = { save: s.save, saved: s.saved, invalid: s.invalid };
 
   return (
@@ -106,6 +109,23 @@ export default async function SettingsPage() {
                   {cs.scriptHint} {SCRIPT_VARIABLES.map((v) => <code key={v} className="mr-1 rounded bg-slate-100 px-1">{`{{${v}}}`}</code>)}
                 </span>
               </label>
+            </div>
+          </ActionForm>
+        </Card>
+
+        <Card title={t.gdpr.title} hint={t.gdpr.hint} className="lg:col-span-2">
+          <ActionForm action={saveRetention} labels={formLabels}>
+            <div className="space-y-2 text-sm text-slate-700">
+              <label className="flex flex-wrap items-center gap-2">
+                <input type="checkbox" name="enabled" defaultChecked={retention.enabled} className="size-4 rounded border-slate-300" />
+                {t.gdpr.enable}
+                <input name="months" type="number" min={1} max={120} required defaultValue={retention.months} className={`${inputClass} w-20 tabular-nums`} />
+                {t.gdpr.months}
+              </label>
+              <p className="text-xs text-slate-500">{t.gdpr.note}</p>
+              <p className="text-xs text-slate-500">
+                <span className="font-semibold tabular-nums text-slate-700">{wouldDelete}</span> {t.gdpr.preview}
+              </p>
             </div>
           </ActionForm>
         </Card>

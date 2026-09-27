@@ -23,7 +23,7 @@ export default async function LoginPage() {
           <p className="mt-1 text-sm text-slate-500">{t.login.subtitle}</p>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <LoginForm labels={t.login} />
+          <LoginForm labels={t.login} forgotLabel={t.forgot.link} />
         </div>
         {/* Demo accounts are only shown when SHOW_DEMO_LOGINS=true (never on a public site with real data) */}
         {process.env.SHOW_DEMO_LOGINS === "true" && (

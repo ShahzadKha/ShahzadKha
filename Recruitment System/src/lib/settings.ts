@@ -81,3 +81,17 @@ export const getClosingSettings = cache(async (): Promise<ClosingSettings> => {
   const parsed = ClosingSettingsSchema.safeParse({ ...DEFAULT_CLOSING_SETTINGS, ...asObject(row?.value) });
   return parsed.success ? parsed.data : DEFAULT_CLOSING_SETTINGS;
 });
+
+// GDPR: how long candidates who did not buy are kept
+export const RetentionSettingsSchema = z.object({
+  enabled: z.boolean(),
+  months: z.number().int().min(1).max(120),
+});
+export type RetentionSettings = z.infer<typeof RetentionSettingsSchema>;
+export const DEFAULT_RETENTION: RetentionSettings = { enabled: false, months: 24 };
+
+export const getRetentionSettings = cache(async (): Promise<RetentionSettings> => {
+  const row = await db.setting.findUnique({ where: { key: "retentionSettings" } });
+  const parsed = RetentionSettingsSchema.safeParse({ ...DEFAULT_RETENTION, ...asObject(row?.value) });
+  return parsed.success ? parsed.data : DEFAULT_RETENTION;
+});
