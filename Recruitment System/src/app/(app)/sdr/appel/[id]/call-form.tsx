@@ -7,7 +7,15 @@ import type { Dictionary } from "@/lib/i18n/fr";
 
 type Outcome = keyof Dictionary["callSheet"]["outcomes"];
 
-export function CallForm({ action, t }: { action: (prev: CallState, formData: FormData) => Promise<CallState>; t: Dictionary["callSheet"] }) {
+export function CallForm({
+  action,
+  t,
+  timeZone,
+}: {
+  action: (prev: CallState, formData: FormData) => Promise<CallState>;
+  t: Dictionary["callSheet"];
+  timeZone: string;
+}) {
   const [state, formAction, pending] = useActionState(action, undefined);
   const [outcome, setOutcome] = useState<Outcome>("payment_link");
 
@@ -27,7 +35,9 @@ export function CallForm({ action, t }: { action: (prev: CallState, formData: Fo
 
       {outcome === "callback" && (
         <label className="block">
-          <span className="mb-1 block text-xs font-medium text-slate-600">{t.callbackAt}</span>
+          <span className="mb-1 block text-xs font-medium text-slate-600">
+            {t.callbackAt} <span className="font-normal text-slate-400">({timeZone.replace(/_/g, " ")})</span>
+          </span>
           <input type="datetime-local" name="callbackAt" required className={inputClass} />
         </label>
       )}
@@ -60,8 +70,6 @@ export function CallForm({ action, t }: { action: (prev: CallState, formData: Fo
         <span className="mb-1 block text-xs font-medium text-slate-600">{t.notes}</span>
         <textarea name="notes" rows={4} maxLength={3000} className={inputClass} />
       </label>
-      {/* The browser's time zone, so a callback typed as 10:00 is 10:00 for the SDR */}
-      <input type="hidden" name="tzOffset" value={new Date().getTimezoneOffset()} suppressHydrationWarning />
       {state?.ok === false && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-red-700">{t.callbackAt} ?</p>}
       <button type="submit" disabled={pending} className={`${buttonClass.primary} w-full justify-center`}>
         {t.save}

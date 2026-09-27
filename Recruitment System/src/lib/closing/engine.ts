@@ -4,6 +4,7 @@ import { getBrand, getClosingSettings, getEmailSettings } from "@/lib/settings";
 import type { EventType } from "@/generated/prisma/enums";
 import { advanceStatus, ensureDefaultSequences, moveCandidate, sendDueSteps, sendEmail, stopEnrollment } from "@/lib/nurture/engine";
 import { STATUS_RANK } from "@/lib/nurture/status";
+import { TIME_ZONE } from "@/lib/format";
 import { appUrl, deliver, emailMode } from "@/lib/nurture/mailer";
 
 const HOUR = 60 * 60 * 1000;
@@ -128,7 +129,7 @@ export async function logCall(
     await sendPaymentLink(candidateId, actor);
   } else if (input.outcome === "callback") {
     const due = input.callbackAt && input.callbackAt > now ? input.callbackAt : new Date(now.getTime() + 24 * HOUR);
-    await logEvent(candidateId, "CALL_LOGGED", "Rappel planifié", `${summary} · rappel le ${due.toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}`, actor.actorId);
+    await logEvent(candidateId, "CALL_LOGGED", "Rappel planifié", `${summary} · rappel le ${due.toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short", timeZone: TIME_ZONE })}`, actor.actorId);
     await db.callTask.create({ data: { candidateId, sdrId: c.assignedSdrId ?? actor.actorId, kind: "callback", dueAt: due } });
   } else if (input.outcome === "nurture") {
     await logEvent(candidateId, "CALL_LOGGED", "Appel — pas maintenant", summary, actor.actorId);
@@ -235,10 +236,12 @@ async function createReferral(referrerId: string, referrerName: string, name: st
     await logEvent(existing.id, "REFERRAL_CREATED", "Recommandé à nouveau", `Par ${referrerName}`);
     return;
   }
+  // "Malik Benz" → first name Malik, last name Benz (so the lead sorts and displays like everyone else)
+  const [first = "", ...rest] = (name ?? "").trim().split(/\s+/);
   const lead = await db.candidate.create({
     data: {
-      firstName: name ?? "",
-      lastName: "",
+      firstName: first,
+      lastName: rest.join(" "),
       email,
       source: "REFERRAL",
       sourceDetail: `Recommandé par ${referrerName}`.slice(0, 60),

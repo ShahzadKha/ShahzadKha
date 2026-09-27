@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { getDictionary } from "@/lib/i18n";
 import { PERIODS, getDashboard, type Period } from "@/lib/analytics";
-import { formatDate, formatDateTime, formatMoney, initials } from "@/lib/format";
+import { formatDate, formatDateTime, formatMoney, initials, TIME_ZONE } from "@/lib/format";
 import { Avatar, Card, PageHeader, ScorePill, StatusBadge } from "@/components/ui";
 import { BarList, ColumnChart } from "@/components/charts";
 
@@ -56,7 +56,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/">) {
     };
   });
 
-  const weekLabel = new Intl.DateTimeFormat(locale === "fr" ? "fr-FR" : "en-GB", { day: "2-digit", month: "2-digit" });
+  const weekLabel = new Intl.DateTimeFormat(locale === "fr" ? "fr-FR" : "en-GB", { day: "2-digit", month: "2-digit", timeZone: TIME_ZONE });
 
   return (
     <>

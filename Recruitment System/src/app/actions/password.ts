@@ -6,6 +6,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { getBrand } from "@/lib/settings";
 import { appUrl, deliver, emailMode } from "@/lib/nurture/mailer";
+import { overLimit } from "@/lib/rate-limit";
 
 const HOUR = 60 * 60 * 1000;
 const hash = (token: string) => createHash("sha256").update(token).digest("hex");
@@ -17,6 +18,7 @@ export async function requestPasswordReset(_prev: ForgotState, formData: FormDat
   if (emailMode() !== "smtp") return { result: "no_email" };
   const email = z.email().safeParse(String(formData.get("email") ?? "").trim().toLowerCase());
   if (!email.success) return { result: "sent" };
+  if (await overLimit("password-reset", 10, HOUR)) return { result: "sent" };
 
   const user = await db.user.findUnique({ where: { email: email.data } });
   if (!user?.active) return { result: "sent" };
@@ -53,7 +55,7 @@ export async function resetPassword(token: string, _prev: ResetState, formData: 
   if (!user?.active) return { result: "invalid" };
 
   await db.$transaction([
-    db.user.update({ where: { id: user.id }, data: { passwordHash: await bcrypt.hash(next, 10) } }),
+    db.user.update({ where: { id: user.id }, data: { passwordHash: await bcrypt.hash(next, 10), passwordChangedAt: new Date() } }),
     // This link and any other pending link for the account stop working
     db.passwordReset.updateMany({ where: { userId: user.id, usedAt: null }, data: { usedAt: new Date() } }),
     // A fresh password lifts the login lockout

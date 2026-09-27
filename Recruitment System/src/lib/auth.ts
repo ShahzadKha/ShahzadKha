@@ -13,14 +13,17 @@ export const getCurrentUser = cache(async () => {
   if (!session) return null;
   const user = await db.user.findUnique({
     where: { id: session.userId },
-    select: { id: true, name: true, email: true, role: true, active: true },
+    select: { id: true, name: true, email: true, role: true, active: true, passwordChangedAt: true },
   });
-  return user?.active ? user : null;
+  if (!user?.active) return null;
+  // Opened before the last password change (e.g. on a lost laptop): no longer valid
+  if (user.passwordChangedAt && Math.floor(user.passwordChangedAt.getTime() / 1000) > (session.iat ?? 0)) return null;
+  return { id: user.id, name: user.name, email: user.email, role: user.role, active: user.active };
 });
 
 export async function requireUser(roles?: Role[]) {
   const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  if (!user) redirect("/api/session/end");
   if (roles && !roles.includes(user.role)) redirect("/");
   return user;
 }

@@ -9,7 +9,15 @@ export function emailMode(): "smtp" | "simulated" {
 
 let transporter: Transporter | null = null;
 
-export async function deliver(msg: { to: string; subject: string; text: string; html: string; fromName: string }) {
+export async function deliver(msg: {
+  to: string;
+  subject: string;
+  text: string;
+  html: string;
+  fromName: string;
+  /** Candidate emails: one-click unsubscribe link, shown by Gmail / Yahoo / Outlook next to the sender */
+  unsubscribeUrl?: string;
+}) {
   if (emailMode() === "simulated") return { provider: "simulated" as const };
   transporter ??= nodemailer.createTransport(process.env.SMTP_URL!);
   const from = process.env.EMAIL_FROM;
@@ -21,6 +29,9 @@ export async function deliver(msg: { to: string; subject: string; text: string; 
     text: msg.text,
     html: msg.html,
     replyTo: process.env.EMAIL_REPLY_TO || from,
+    headers: msg.unsubscribeUrl
+      ? { "List-Unsubscribe": `<${msg.unsubscribeUrl}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" }
+      : undefined,
   });
   return { provider: "smtp" as const };
 }

@@ -1,6 +1,7 @@
 import "server-only";
 import { db } from "@/lib/db";
 import { STATUS_RANK } from "@/lib/nurture/status";
+import { startOfDay, weekday } from "@/lib/format";
 import type { CandidateSource, CandidateStatus } from "@/generated/prisma/enums";
 
 export const PERIODS = ["7", "30", "90", "all"] as const;
@@ -172,10 +173,8 @@ function avg(values: number[]) {
   return values.length ? Math.round(values.reduce((a, b) => a + b, 0) / values.length) : null;
 }
 
-// Monday 00:00 (local server time) of the week containing `t`
+// Monday 00:00 (team time zone) of the week containing `t`
 function startOfWeek(t: number) {
   const d = new Date(t);
-  d.setHours(0, 0, 0, 0);
-  const day = (d.getDay() + 6) % 7;
-  return d.getTime() - day * DAY;
+  return startOfDay(new Date(startOfDay(d).getTime() - weekday(d) * DAY + DAY / 2)).getTime();
 }

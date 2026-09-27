@@ -99,7 +99,8 @@ with publishing consent, refer a friend). The dashboard NPS updates.
 | Job boards / partners / Activepieces? | CSV import (with partner name) or the import API (`/api/intake`). |
 | Acumbamail? | Contacts are synced to their Acumbamail list with custom fields (status, score, training…), and Acumbamail can be the SMTP sender. |
 | Can we put the form on our landing page? | Yes: a direct link or an `<iframe>` code on the Intégrations page, with `ref=` to track each page or partner. |
-| GDPR? | Consent on the form, unsubscribe link in every email, "only email consenting candidates" option, candidate deletion. |
+| GDPR? | Consent on the form, unsubscribe link and one-click unsubscribe in every email, "only email consenting candidates" option, data export, automatic retention, and deletion that also reaches Acumbamail. |
+| Will spam filters or link scanners fake the numbers? | No: a click or a price view only counts when the offer page is really shown in a browser. |
 | Can we change the emails and rules ourselves? | Yes, everything is in Séquences email and Paramètres, without code. |
 | Where is it hosted? | Vercel + a PostgreSQL database (Neon), or any server they prefer. |
 

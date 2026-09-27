@@ -61,6 +61,35 @@ export async function syncContact(candidateId: string) {
   }
 }
 
+/** Unsubscribed here → unsubscribed in the Acumbamail list too, so campaigns sent from Acumbamail skip them. */
+export async function unsubscribeContact(email: string) {
+  if (!acumbamailConfigured()) return;
+  try {
+    await call("unsubscribeSubscriber", { list_id: process.env.ACUMBAMAIL_LIST_ID!, email });
+  } catch (e) {
+    console.error("Acumbamail unsubscribe failed:", e instanceof Error ? e.message : e);
+  }
+}
+
+/**
+ * Candidates deleted here (by a person, or by the GDPR retention) are deleted from the list too:
+ * erasure has to reach every tool holding the data. Never throws.
+ */
+export async function deleteContacts(emails: string[]) {
+  if (!acumbamailConfigured() || emails.length === 0) return;
+  const queue = [...emails];
+  const worker = async () => {
+    for (let email = queue.shift(); email; email = queue.shift()) {
+      try {
+        await call("deleteSubscriber", { list_id: process.env.ACUMBAMAIL_LIST_ID!, email });
+      } catch (e) {
+        console.error("Acumbamail delete failed:", e instanceof Error ? e.message : e);
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(5, emails.length) }, worker));
+}
+
 /** Connection test for the Integrations page. */
 export async function testAcumbamail() {
   await call("getLists", {});

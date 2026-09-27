@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { parseLocalDateTime } from "@/lib/format";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
@@ -50,9 +51,8 @@ export async function logCallAction(candidateId: string, _prev: CallState, formD
   });
   if (!parsed.success) return { ok: false };
   const d = parsed.data;
-  // datetime-local has no time zone: it is the SDR's local time, sent with their offset
-  const offset = Number(formData.get("tzOffset") ?? 0);
-  const callbackAt = d.callbackAt ? new Date(new Date(`${d.callbackAt}:00Z`).getTime() + offset * 60_000) : null;
+  // datetime-local has no time zone: it is read in the team's time zone (APP_TIMEZONE)
+  const callbackAt = d.callbackAt ? parseLocalDateTime(d.callbackAt) : null;
   await logCall(
     candidateId,
     { outcome: d.outcome, notes: d.notes, durationMin: d.durationMin, blocker: d.blocker, callbackAt, lostReason: d.lostReason ?? null },

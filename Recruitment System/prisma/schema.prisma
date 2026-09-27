@@ -115,6 +115,9 @@ model User {
   active       Boolean  @default(true)
   createdAt    DateTime @default(now())
 
+  // Sessions opened before this moment are refused: changing a password logs out other devices
+  passwordChangedAt DateTime?
+
   assignedCandidates Candidate[]      @relation("AssignedSdr")
   events             CandidateEvent[]
   tasks              CallTask[]
@@ -405,4 +408,13 @@ model PasswordReset {
   createdAt DateTime  @default(now())
 
   @@index([userId])
+}
+
+// One use of a public form by one visitor (see src/lib/rate-limit.ts)
+model RateHit {
+  id        String   @id @default(cuid())
+  key       String // "apply:1.2.3.4"
+  createdAt DateTime @default(now())
+
+  @@index([key, createdAt])
 }

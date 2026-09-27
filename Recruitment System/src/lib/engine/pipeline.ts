@@ -71,6 +71,14 @@ export async function ingestCv(input: IngestInput): Promise<IngestResult> {
 
   if (existing) {
     const how = existing.email === email ? `email ${email}` : `téléphone ${phone}`;
+    // A lost or nurtured candidate who applies again (form or email) is showing new interest:
+    // start their journey over. Someone who unsubscribed only comes back with a fresh consent.
+    const optedOut = Boolean(existing.unsubscribedAt) && !input.consent;
+    const comesBack =
+      Boolean(cvText) &&
+      (input.source === "WEB_FORM" || input.source === "EMAIL") &&
+      (existing.status === "LOST" || existing.status === "NURTURE") &&
+      !optedOut;
     await db.candidate.update({
       where: { id: existing.id },
       data: {
@@ -84,13 +92,29 @@ export async function ingestCv(input: IngestInput): Promise<IngestResult> {
         motivation: clean(input.motivation) ?? existing.motivation,
         sourceDetail: existing.sourceDetail ?? cleanDetail(input.sourceDetail),
         consentAt: input.consent ? new Date() : existing.consentAt,
+        ...(comesBack
+          ? { status: "CV_PARSED", unsubscribedAt: null, interestConfirmed: false, priceViewed: false, timingDays: null }
+          : {}),
         events: {
-          create: {
-            type: "DUPLICATE_MERGED",
-            title: "Doublon détecté",
-            detail: `Même ${how} — fiche mise à jour (${sourceLabel(input.source)})`,
-            actorId: input.actorId ?? null,
-          },
+          create: [
+            {
+              type: "DUPLICATE_MERGED",
+              title: "Doublon détecté",
+              detail: `Même ${how} — fiche mise à jour (${sourceLabel(input.source)})`,
+              actorId: input.actorId ?? null,
+            },
+            ...(comesBack
+              ? [
+                  {
+                    type: "STATUS_CHANGED" as const,
+                    title: "Nouvelle candidature",
+                    detail: `Revient après « ${existing.status === "LOST" ? "Perdu" : "Nurturing"} » — parcours relancé`,
+                    toStatus: "CV_PARSED" as const,
+                    createdAt: new Date(Date.now() + 1),
+                  },
+                ]
+              : []),
+          ],
         },
       },
     });

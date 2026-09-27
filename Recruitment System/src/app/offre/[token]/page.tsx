@@ -1,21 +1,21 @@
 import type { Metadata } from "next";
-import { after } from "next/server";
 import { CheckCircle2, Eye } from "lucide-react";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { getDictionary } from "@/lib/i18n";
 import { getBrand } from "@/lib/settings";
 import { formatMoney } from "@/lib/format";
-import { recordPriceView } from "@/lib/nurture/engine";
 import { STATUS_RANK } from "@/lib/nurture/status";
-import { requestCallback } from "@/app/actions/public";
+import { recordOfferVisit, requestCallback } from "@/app/actions/public";
 import { OfferForm } from "./offer-form";
+import { OfferBeacon } from "./offer-beacon";
 
 export const metadata: Metadata = { robots: { index: false } };
 
 // Personalised offer page, opened from the emails. Viewing it = "prix consulté".
-export default async function OfferPage({ params }: PageProps<"/offre/[token]">) {
+export default async function OfferPage({ params, searchParams }: PageProps<"/offre/[token]">) {
   const { token } = await params;
+  const { m } = await searchParams;
   const [{ t }, brand, viewer] = await Promise.all([getDictionary(), getBrand(), getCurrentUser()]);
   const c = await db.candidate.findUnique({
     where: { publicToken: token },
@@ -25,7 +25,6 @@ export default async function OfferPage({ params }: PageProps<"/offre/[token]">)
 
   // Team members previewing the page are not counted as candidate visits
   const preview = Boolean(viewer);
-  if (c && product && !preview) after(() => recordPriceView(c.id));
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-indigo-50 to-[#f6f7f9]">
@@ -39,6 +38,7 @@ export default async function OfferPage({ params }: PageProps<"/offre/[token]">)
             <Eye className="size-4" /> {t.offer.preview}
           </p>
         )}
+        {c && product && !preview && <OfferBeacon record={recordOfferVisit.bind(null, token, typeof m === "string" ? m : null)} />}
         {!c || !product ? (
           <p className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-600">{t.offer.notFound}</p>
         ) : (

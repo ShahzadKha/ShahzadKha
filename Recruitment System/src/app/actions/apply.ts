@@ -4,6 +4,7 @@ import { after } from "next/server";
 import { z } from "zod";
 import { analyzeCandidate, ingestCv } from "@/lib/engine/pipeline";
 import { intakeErrorCode, type IntakeErrorCode } from "@/lib/engine/errors";
+import { overLimit } from "@/lib/rate-limit";
 
 // Public web form (diagram source "Formulaire web — Skillhubs.io / landing page")
 const ApplySchema = z.object({
@@ -18,7 +19,7 @@ const ApplySchema = z.object({
 
 export type ApplyState =
   | { ok: true }
-  | { ok: false; error: IntakeErrorCode | "invalid"; fields?: string[]; values?: Record<string, string> }
+  | { ok: false; error: IntakeErrorCode | "invalid" | "too_many"; fields?: string[]; values?: Record<string, string> }
   | undefined;
 
 export async function submitApplication(_prev: ApplyState, formData: FormData): Promise<ApplyState> {
@@ -34,6 +35,8 @@ export async function submitApplication(_prev: ApplyState, formData: FormData): 
   }
   const file = formData.get("cv");
   if (!(file instanceof File) || file.size === 0) return { ok: false, error: "no_file", fields: ["cv"], values };
+  // 10 applications per hour from one connection: plenty for people, stops bots
+  if (await overLimit("apply", 10, 60 * 60 * 1000)) return { ok: false, error: "too_many", values };
 
   try {
     const { consent, motivation, ...contact } = parsed.data;

@@ -4,7 +4,7 @@ import { SignJWT, jwtVerify } from "jose";
 export const SESSION_COOKIE = "rs_session";
 const MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 
-export type SessionPayload = { userId: string; role: "ADMIN" | "SDR" | "RECRUITER" };
+export type SessionPayload = { userId: string; role: "ADMIN" | "SDR" | "RECRUITER"; iat?: number };
 
 function secretKey() {
   const secret = process.env.AUTH_SECRET;

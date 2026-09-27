@@ -2,10 +2,11 @@
 
 import bcrypt from "bcryptjs";
 import { z } from "zod";
-import { cookies, headers } from "next/headers";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { encryptSession, SESSION_COOKIE, sessionCookieOptions } from "@/lib/session";
+import { clientIp } from "@/lib/rate-limit";
 
 const LoginSchema = z.object({
   email: z.email().trim().toLowerCase(),
@@ -17,11 +18,6 @@ export type LoginState = { error?: "invalid" | "locked"; email?: string } | unde
 const WINDOW_MS = 15 * 60 * 1000;
 const MAX_PER_EMAIL = 5;
 const MAX_PER_IP = 20;
-
-async function clientIp() {
-  const h = await headers();
-  return h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || null;
-}
 
 // Too many failed logins for this email or this IP in the last 15 minutes
 async function isLocked(email: string, ip: string | null) {

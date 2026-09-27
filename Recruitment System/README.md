@@ -20,6 +20,8 @@ while keeping the same steps, statuses and routing rules.
 
 | 7 | Daily-use review: forgot password by email, scanned CVs and photos read by OpenAI, personal emails from the profile, GDPR retention and data export, list sorting, email previews, watched-folder guide | ✅ Done |
 
+| 8 | Production review: tracking that email scanners cannot fake, one-click unsubscribe (Gmail/Yahoo rule), French time zone everywhere, returning applicants, anti-spam limits on public forms, erasure reaching every trace and Acumbamail, logout of other devices on password change | ✅ Done |
+
 **Presenting to the client?** Follow [DEMO_SCRIPT.md](DEMO_SCRIPT.md), a 15-minute walkthrough of the whole journey.
 
 ## Tech stack
@@ -84,6 +86,7 @@ histories (sent, opened, clicked, replied) and sequences in progress.
    | `AUTH_SECRET` | a long random text (32+ characters) |
    | `APP_URL` | the Vercel address, e.g. `https://recruitment-demo.vercel.app` |
    | `CRON_SECRET` | a random text (protects the daily email job) |
+   | `APP_TIMEZONE` | optional, the team's time zone (default `Europe/Paris`) |
    | `SHOW_DEMO_LOGINS` | `true` only while showing demo data; leave it off once real data is in |
    | `INTAKE_API_KEY` | optional, turns on the import API |
    | `OPENAI_API_KEY`, `OPENAI_MODEL` | optional, real AI analysis |
@@ -186,7 +189,7 @@ What the candidate does moves them through the pipeline automatically:
 | An email containing the offer is sent | `OFFER_SENT` |
 | Replies "interested" | Sequence stops, `INTEREST_CONFIRMED`, the personalised offer email is sent |
 | Replies "not interested" / unsubscribes | Sequence stops, `LOST` (no more emails) |
-| Opens their **offer page** (`/offre/…`, shows the price) | `PRICE_VIEWED` |
+| Opens their **offer page** (`/offre/…`, shows the price) in a browser | `PRICE_VIEWED` |
 | Asks to be called back and picks a start date | Interest and timing recorded |
 | All 4 conditions met (fit, interest, price viewed, timing) | `PURCHASE_READY`, sequence stops (ready for an SDR) |
 | Sequence ends with no interest | `NURTURE` (recycled) |
@@ -195,6 +198,15 @@ What the candidate does moves them through the pipeline automatically:
 (OpenAI if configured, otherwise keywords): *interested* → offer email; *not interested* → lost;
 *STOP / unsubscribe* → unsubscribed. A reply from a candidate who is already with an SDR is logged
 and the SDR is notified, without changing their status. The quoted email below the reply is removed.
+
+**Email scanners**: Outlook, Gmail and company firewalls open every link in an email to check it.
+So a click and a price view are only recorded when the offer page has really been shown in a
+browser for a moment, never when a link is merely fetched. (Opens rely on the image pixel, as in
+every email tool; Apple Mail can count an open the person did not make.)
+
+**Returning applicants**: a candidate who was lost or in nurturing and applies again (web form or
+email) starts a fresh journey: new analysis, new sequence, "Nouvelle candidature" in the history.
+Someone who unsubscribed only comes back if they tick the consent box again.
 
 **Recycling**: candidates who finish a sequence without buying (`NURTURE`) get the educational
 sequence again after 30 days, once (both editable in Séquences email → options).
@@ -213,8 +225,15 @@ SMTP_URL="smtp://user:password@smtp.provider.com:587"
 EMAIL_FROM="contact@your-domain.com"
 ```
 
+Every candidate email has an unsubscribe link and the **one-click unsubscribe** headers that Gmail
+and Yahoo require from bulk senders (their "Se désabonner" button next to the sender works directly).
+
 Emails are sent by a daily scheduler: `vercel.json` calls `/api/cron/sequences` every morning on
 Vercel (set `CRON_SECRET`). The "Envoyer les emails prévus" button does the same on demand.
+The same job reads the mailbox. Vercel's free plan runs it **once a day**; to read replies and
+emailed CVs more often, either use a paid Vercel plan (change the schedule in `vercel.json`) or a
+free service such as cron-job.org calling `https://<your app>/api/cron/sequences` every 15 minutes
+with the header `Authorization: Bearer <CRON_SECRET>`.
 
 ## Closing and after the sale (steps 19–26)
 
@@ -298,6 +317,8 @@ won, lost and not-eligible candidates. The status can also be changed from the c
   sending; otherwise the page asks to contact an administrator). Using it also lifts a login lockout.
 - **Export (CSV)** on the candidate list, with the current filters (opens in Excel).
 - **GDPR deletion**: admins can delete a candidate with their CV, emails, calls, payments and history.
+  The deletion also clears the inbox log, the team notifications about them and the email a customer
+  gave when recommending them, and removes the contact from the Acumbamail list.
 - **GDPR access**: *Exporter ses données* on the profile downloads everything stored about the person (JSON).
 - **GDPR retention** (Settings): optionally delete candidates with no activity for N months, every day.
   Customers are never deleted automatically; the page shows how many would be deleted today.
@@ -307,9 +328,14 @@ won, lost and not-eligible candidates. The status can also be changed from the c
 
 - Passwords are hashed (bcrypt). Sessions are signed cookies (`AUTH_SECRET`), HTTP-only.
 - After 5 wrong passwords for an email (or 20 from one IP) in 15 minutes, logins are blocked for 15 minutes.
+- Changing or resetting a password logs the account out on every other device.
+  A deactivated user is logged out at their next click.
+- Public forms are limited per connection: 10 applications, 10 callback requests and 10
+  password-reset requests per hour (stops bots and protects the OpenAI bill).
 - Roles: SDRs only see their own calls and cannot open settings, sequences, users or exports.
 - Public links (offer, payment, feedback, unsubscribe) use random, unguessable tokens.
-  Unsubscribing needs a button click, so email scanners cannot trigger it.
+  Unsubscribing needs a button click (or the mail app's one-click unsubscribe, which sends a POST),
+  so email scanners cannot trigger it.
 - Webhooks and APIs check their secret keys. The ThriveCart secret is never stored.
 - Uploaded CVs are stored with the type the app detected, and Word and text files download
   instead of opening, so a disguised file cannot run in the browser.
@@ -338,11 +364,11 @@ prisma/
 src/
   app/
     login/           Login page
-    (app)/           Pages behind the login: dashboard, candidates, users, upcoming modules
+    (app)/           Pages behind the login: dashboard, candidates, pipeline, sequences, SDR, settings, users
     apply/           Public candidate web form
     offre/           Candidate's personalised offer page (public link from emails)
     desinscription/  Unsubscribe page
-    api/t/           Email open and click tracking
+    api/t/           Email tracking (open pixel, links) and one-click unsubscribe
     api/cron/        Daily scheduler that sends due emails
     api/webhooks/    ThriveCart payment webhook
     (app)/integrations/  Integrations page (status and tests)

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
+import { eraseCandidates } from "@/lib/gdpr/retention";
 import { requireUser } from "@/lib/auth";
 import { normalizePhone } from "@/lib/engine/parse";
 import { sendEmail } from "@/lib/nurture/engine";
@@ -101,7 +102,7 @@ export async function addNote(candidateId: string, formData: FormData) {
 // GDPR right to erasure: removes the candidate with their CV, emails, calls, payments and history
 export async function deleteCandidate(candidateId: string) {
   await requireUser(["ADMIN"]);
-  await db.candidate.delete({ where: { id: candidateId } });
+  await eraseCandidates([candidateId]);
   revalidatePath("/candidates");
   revalidatePath("/pipeline");
   redirect("/candidates");

@@ -2,8 +2,11 @@
 
 import { db } from "@/lib/db";
 import { z } from "zod";
-import { recordInterest, unsubscribe } from "@/lib/nurture/engine";
+import { recordClick, recordInterest, recordPriceView, unsubscribe } from "@/lib/nurture/engine";
 import { confirmPayment, recordFeedback } from "@/lib/closing/engine";
+import { overLimit } from "@/lib/rate-limit";
+
+const HOUR = 60 * 60 * 1000;
 
 const TIMINGS = [14, 30, 60, 120];
 
@@ -12,8 +15,20 @@ export async function requestCallback(publicToken: string, _prev: { ok: boolean 
   const c = await db.candidate.findUnique({ where: { publicToken }, select: { id: true } });
   const timing = Number(formData.get("timing"));
   if (!c || !TIMINGS.includes(timing)) return { ok: false };
+  if (await overLimit("callback", 10, HOUR)) return { ok: false };
   await recordInterest(c.id, timing);
   return { ok: true };
+}
+
+// Sent by the offer page once a real browser has shown it (not by mail scanners)
+export async function recordOfferVisit(publicToken: string, messageToken: string | null) {
+  const c = await db.candidate.findUnique({ where: { publicToken }, select: { id: true, recommendedProductId: true } });
+  if (!c?.recommendedProductId) return;
+  if (messageToken) {
+    const m = await db.emailMessage.findFirst({ where: { token: messageToken, candidateId: c.id }, select: { id: true } });
+    if (m) await recordClick(m.id);
+  }
+  await recordPriceView(c.id);
 }
 
 export async function confirmUnsubscribe(publicToken: string) {

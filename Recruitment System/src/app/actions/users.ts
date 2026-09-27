@@ -3,13 +3,19 @@
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { db } from "@/lib/db";
+import { encryptSession, SESSION_COOKIE, sessionCookieOptions } from "@/lib/session";
 import { requireUser } from "@/lib/auth";
 import { Role } from "@/generated/prisma/enums";
 
 export type UserFormState = { ok: boolean; error?: "invalid" | "email_taken" | "last_admin" | "wrong_password"; at: number } | undefined;
 
 const password = z.string().min(8).max(200);
+
+async function renewSession(userId: string, role: Role) {
+  (await cookies()).set(SESSION_COOKIE, await encryptSession({ userId, role }), sessionCookieOptions);
+}
 
 const CreateSchema = z.object({
   name: z.string().trim().min(1).max(80),
@@ -38,7 +44,7 @@ async function wouldRemoveLastAdmin(userId: string, change: { role?: Role; activ
 }
 
 export async function updateUser(userId: string, _prev: UserFormState, formData: FormData): Promise<UserFormState> {
-  await requireUser(["ADMIN"]);
+  const admin = await requireUser(["ADMIN"]);
   const role = z.enum(Role).safeParse(formData.get("role"));
   const active = formData.get("active") === "on";
   if (!role.success) return { ok: false, error: "invalid", at: Date.now() };
@@ -49,8 +55,14 @@ export async function updateUser(userId: string, _prev: UserFormState, formData:
 
   await db.user.update({
     where: { id: userId },
-    data: { role: role.data, active, ...(newPassword ? { passwordHash: await bcrypt.hash(newPassword, 10) } : {}) },
+    data: {
+      role: role.data,
+      active,
+      ...(newPassword ? { passwordHash: await bcrypt.hash(newPassword, 10), passwordChangedAt: new Date() } : {}),
+    },
   });
+  // A new password logs the person out everywhere; an admin changing their own stays logged in here
+  if (newPassword && userId === admin.id) await renewSession(admin.id, role.data);
   // A deactivated SDR's open calls go back to be reassigned
   if (!active) await db.callTask.updateMany({ where: { sdrId: userId, status: "OPEN" }, data: { status: "CANCELLED", completedAt: new Date() } });
   revalidatePath("/users");
@@ -64,6 +76,8 @@ export async function changeOwnPassword(_prev: UserFormState, formData: FormData
   if (!next.success || next.data !== String(formData.get("confirm") ?? "")) return { ok: false, error: "invalid", at: Date.now() };
   const row = await db.user.findUniqueOrThrow({ where: { id: user.id } });
   if (!(await bcrypt.compare(current, row.passwordHash))) return { ok: false, error: "wrong_password", at: Date.now() };
-  await db.user.update({ where: { id: user.id }, data: { passwordHash: await bcrypt.hash(next.data, 10) } });
+  await db.user.update({ where: { id: user.id }, data: { passwordHash: await bcrypt.hash(next.data, 10), passwordChangedAt: new Date() } });
+  // Other devices are logged out; this one gets a fresh session
+  await renewSession(user.id, user.role);
   return { ok: true, at: Date.now() };
 }

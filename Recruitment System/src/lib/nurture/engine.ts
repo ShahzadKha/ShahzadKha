@@ -4,7 +4,7 @@ import { getBrand, getEmailSettings, getScoringRules } from "@/lib/settings";
 import { purchaseReadyConditions } from "@/lib/rules";
 import type { CandidateStatus, EventType } from "@/generated/prisma/enums";
 import { appUrl, deliver } from "./mailer";
-import { syncContact } from "@/lib/integrations/acumbamail";
+import { syncContact, unsubscribeContact } from "@/lib/integrations/acumbamail";
 import { renderEmail, type TemplateVars } from "./render";
 import { STATUS_RANK, canAdvance, shouldRecycle } from "./status";
 import { DEFAULT_ONBOARDING, DEFAULT_SEQUENCES } from "./defaults";
@@ -88,7 +88,16 @@ export async function sendEmail(
   let provider = "simulated";
   let error: string | null = null;
   try {
-    provider = (await deliver({ to: ctx.to, subject: email.subject, text: email.text, html: email.html, fromName: ctx.fromName })).provider;
+    provider = (
+      await deliver({
+        to: ctx.to,
+        subject: email.subject,
+        text: email.text,
+        html: email.html,
+        fromName: ctx.fromName,
+        unsubscribeUrl: `${base}/api/t/u/${candidate.publicToken}`,
+      })
+    ).provider;
   } catch (e) {
     error = e instanceof Error ? e.message : String(e);
     provider = "smtp";
@@ -375,10 +384,11 @@ export async function recordInterest(candidateId: string, timingDays: number, ac
 }
 
 export async function unsubscribe(candidateId: string) {
-  const c = await db.candidate.findUnique({ where: { id: candidateId }, select: { unsubscribedAt: true } });
+  const c = await db.candidate.findUnique({ where: { id: candidateId }, select: { unsubscribedAt: true, email: true } });
   if (!c || c.unsubscribedAt) return;
   await db.candidate.update({ where: { id: candidateId }, data: { unsubscribedAt: new Date() } });
   await logEvent(candidateId, "UNSUBSCRIBED", "Désinscription", "Ne reçoit plus d'emails");
+  await unsubscribeContact(c.email);
   await stopEnrollment(candidateId, "Désinscription");
   await advanceStatus(candidateId, "LOST", { title: "Perdu", detail: "Désinscription" });
 }

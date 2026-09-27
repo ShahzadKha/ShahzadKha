@@ -2,7 +2,7 @@
 
 import { after } from "next/server";
 import { revalidatePath } from "next/cache";
-import { db } from "@/lib/db";
+import { eraseCandidates } from "@/lib/gdpr/retention";
 import { requireUser } from "@/lib/auth";
 import { analyzeCandidate, requestAnalysis } from "@/lib/engine/pipeline";
 import { enrollCandidate, moveCandidate } from "@/lib/nurture/engine";
@@ -40,7 +40,7 @@ export async function bulkAction(_prev: BulkState, formData: FormData): Promise<
     }
   } else if (action === "delete") {
     if (user.role !== "ADMIN") return { ok: false, done: 0, at: Date.now() };
-    done = (await db.candidate.deleteMany({ where: { id: { in: ids } } })).count;
+    done = await eraseCandidates(ids);
   } else {
     return { ok: false, done: 0, at: Date.now() };
   }

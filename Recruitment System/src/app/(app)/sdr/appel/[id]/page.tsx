@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { getDictionary } from "@/lib/i18n";
 import { getBrand, getClosingSettings } from "@/lib/settings";
-import { formatDateTime, formatMoney, initials } from "@/lib/format";
+import { formatDateTime, formatMoney, initials, TIME_ZONE } from "@/lib/format";
 import { STATUS_RANK } from "@/lib/nurture/status";
 import { fill } from "@/lib/nurture/render";
 import { logCallAction, simulatePaymentAction } from "@/app/actions/closing";
@@ -174,7 +174,7 @@ export default async function CallSheetPage({ params }: PageProps<"/sdr/appel/[i
                     </form>
                   </div>
                 )}
-                <CallForm action={logCallAction.bind(null, c.id)} t={cs} />
+                <CallForm action={logCallAction.bind(null, c.id)} t={cs} timeZone={TIME_ZONE} />
               </>
             )}
           </Card>
