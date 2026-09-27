@@ -1,0 +1,17 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+:root {
+  color-scheme: light;
+  /* Single-series chart colour (reference palette slot 1) */
+  --series-1: #2a78d6;
+}
+
+body {
+  background: #f6f7f9;
+  color: #0f172a;
+}

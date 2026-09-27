@@ -1,0 +1,162 @@
+// Recruitment System — data model
+// Docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  SDR
+  RECRUITER
+}
+
+// Where a CV came from (diagram lane "Sources / Trigger")
+enum CandidateSource {
+  EMAIL // Email entrant (IMAP)
+  WEB_FORM // Formulaire web (Skillhubs.io / landing page)
+  CSV_IMPORT // Import CSV / API partenaires, jobboards
+  FILE_DROP // Dépôt manuel CV (dossier surveillé)
+  MANUAL // Ajout manuel par un recruteur
+}
+
+// Pipeline statuses, in funnel order (diagram legend "Statuts du pipeline")
+enum CandidateStatus {
+  NEW_CV
+  CV_PARSED
+  GPT_ANALYZED
+  NOT_ELIGIBLE
+  PRODUCT_MATCHED
+  EMAIL_1_SENT
+  ENGAGED
+  INTEREST_CONFIRMED
+  OFFER_SENT
+  PRICE_VIEWED
+  PURCHASE_READY
+  SDR_ASSIGNED
+  CALL_COMPLETED
+  WON
+  LOST
+  NURTURE
+}
+
+enum EventType {
+  CREATED
+  UPDATED
+  DUPLICATE_MERGED
+  CV_PARSED
+  AI_ANALYZED
+  STATUS_CHANGED
+  EMAIL_SENT
+  EMAIL_OPENED
+  EMAIL_CLICKED
+  EMAIL_REPLIED
+  PRICE_VIEWED
+  SDR_ASSIGNED
+  CALL_LOGGED
+  PAYMENT_CONFIRMED
+  NOTE
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(RECRUITER)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  assignedCandidates Candidate[]      @relation("AssignedSdr")
+  events             CandidateEvent[]
+}
+
+// Products the company sells (trainings, certifications…)
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  price       Int // in euros
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  candidates Candidate[]
+}
+
+model Candidate {
+  id        String          @id @default(cuid())
+  firstName String
+  lastName  String
+  email     String          @unique
+  phone     String?
+  city      String?
+  country   String?
+  source    CandidateSource
+  status    CandidateStatus @default(NEW_CV)
+
+  // Extracted from the CV
+  currentTitle    String?
+  yearsExperience Int?
+  education       String?
+  skills          String[]
+  languages       String[]
+  linkedinUrl     String?
+  cvFileName      String?
+  cvText          String?
+
+  // AI analysis (step 6–8)
+  persona     String?
+  skillGap    String?
+  aiSummary   String?
+  fitScore    Int? // 0–100
+  needScore   Int? // 0–100
+  intentScore Int? // 0–100
+  globalScore Int? // 0–100
+  eligible    Boolean?
+
+  recommendedProductId String?
+  recommendedProduct   Product? @relation(fields: [recommendedProductId], references: [id])
+
+  // Purchase-ready conditions (step 18)
+  interestConfirmed Boolean @default(false)
+  priceViewed       Boolean @default(false)
+  timingDays        Int? // days until the candidate wants to start
+
+  assignedSdrId String?
+  assignedSdr   User?   @relation("AssignedSdr", fields: [assignedSdrId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  events CandidateEvent[]
+
+  @@index([status])
+  @@index([globalScore])
+}
+
+// Timeline entry for a candidate: everything that happens is logged here
+model CandidateEvent {
+  id          String    @id @default(cuid())
+  candidateId String
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  type        EventType
+  title       String
+  detail      String?
+  toStatus    CandidateStatus? // status the candidate moved to, if this event changed it
+  actorId     String?
+  actor       User?     @relation(fields: [actorId], references: [id])
+  createdAt   DateTime  @default(now())
+
+  @@index([candidateId, createdAt])
+}
+
+// Key/value settings (brand name, thresholds…) so the app is white-label
+model Setting {
+  key   String @id
+  value Json
+}
