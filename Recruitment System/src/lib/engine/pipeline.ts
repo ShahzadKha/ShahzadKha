@@ -9,6 +9,7 @@ import { normalizePhone, parseContact } from "./parse";
 import { analyzeDemo } from "./analyze-demo";
 import { analyzeWithOpenAI } from "./analyze-openai";
 import type { Analysis, AnalysisInput } from "./analysis";
+import { enrollCandidate } from "@/lib/nurture/engine";
 
 export class IngestError extends Error {
   constructor(public code: "no_email" | "no_name") {
@@ -255,4 +256,7 @@ export async function analyzeCandidate(candidateId: string, actorId?: string | n
       events: { create: events },
     },
   });
+
+  // Step 10: eligible candidates start the email sequence of their track
+  if (moveStatus && track) await enrollCandidate(candidateId);
 }

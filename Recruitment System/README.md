@@ -12,8 +12,8 @@ while keeping the same steps, statuses and routing rules.
 |---|-----------|--------|
 | 1 | Foundation: login and roles, database, demo data, candidate list and profile with timeline, dashboard overview | ✅ Done |
 | 2 | AI engine: CV import (PDF/Word/text), public web form, intake API, deduplication, OpenAI analysis with demo mode, scoring and routing rules, Settings | ✅ Done |
-| 3 | Nurturing: pipeline board, email sequences, simulated email events | ⏳ Next |
-| 4 | Closing: SDR workspace, call logging, simulated ThriveCart payment, onboarding | |
+| 3 | Nurturing: email sequences per track, sending (simulated or SMTP), open/click/reply tracking, candidate offer page, unsubscribe, Purchase Ready detection, pipeline board | ✅ Done |
+| 4 | Closing: SDR workspace, call logging, simulated ThriveCart payment, onboarding | ⏳ Next |
 | 5 | Dashboard and polish: funnel charts, KPIs, settings screens, demo script | |
 
 ## Tech stack
@@ -58,7 +58,8 @@ The password for every demo account is `demo1234`.
 | yanis@demo.local | SDR |
 | recruteur@demo.local | Recruiter |
 
-`npm run db:seed` resets the demo data at any time.
+`npm run db:seed` resets the demo data at any time. The demo candidates come with realistic email
+histories (sent, opened, clicked, replied) and sequences in progress.
 
 ## AI analysis: demo mode or OpenAI
 
@@ -122,6 +123,48 @@ updated. Errors are `401` (bad key), `422` (for example `no_email`) and `503` (A
 | `CV_Karim_Haddad.pdf` | Not eligible (chef, no matching training) |
 | `CV_Sarah_Benali_mise_a_jour.txt` | Same email as Sarah → **duplicate**, record updated |
 
+## Email nurturing (steps 10–18)
+
+When the AI finds a candidate eligible, they start the **email sequence of their follow-up track**
+and receive email 1 right away. The next emails go out on their day (the conversion sequence follows
+the diagram: days 0, 3, 6, 9, 13, 17). Admins edit every sequence on **Séquences email**.
+
+What the candidate does moves them through the pipeline automatically:
+
+| Candidate action | Result |
+|------------------|--------|
+| Opens an email or clicks its link | `ENGAGED` |
+| An email containing the offer is sent | `OFFER_SENT` |
+| Replies "interested" | Sequence stops, `INTEREST_CONFIRMED`, the personalised offer email is sent |
+| Replies "not interested" / unsubscribes | Sequence stops, `LOST` (no more emails) |
+| Opens their **offer page** (`/offre/…`, shows the price) | `PRICE_VIEWED` |
+| Asks to be called back and picks a start date | Interest and timing recorded |
+| All 4 conditions met (fit, interest, price viewed, timing) | `PURCHASE_READY`, sequence stops (ready for an SDR) |
+| Sequence ends with no interest | `NURTURE` (recycled) |
+
+**For demos**, every candidate profile has "Simuler une action du candidat" buttons (opens, clicks,
+replies, unsubscribes) and "Envoyer l'email suivant maintenant". The **Séquences email** page has
+"Simuler +1 jour / +7 jours" to fast-forward time. Team members who open an offer page see a
+preview banner, and their visits are not counted.
+
+**Sending real emails**: by default emails are *simulated* (saved and visible in the app, not sent).
+To send them for real through any SMTP provider (Acumbamail, Brevo, Mailjet, Amazon SES…), add to `.env`:
+
+```
+APP_URL="https://your-app.example.com"   # used in the links inside emails
+SMTP_URL="smtp://user:password@smtp.provider.com:587"
+EMAIL_FROM="contact@your-domain.com"
+```
+
+Emails are sent by a daily scheduler: `vercel.json` calls `/api/cron/sequences` every morning on
+Vercel (set `CRON_SECRET`). The "Envoyer les emails prévus" button does the same on demand.
+
+## Pipeline board
+
+**Pipeline** shows one column per status. Drag a card to another column to change the candidate's
+status, which is saved and logged in their timeline. Filters: follow-up track, SDR, and show or hide
+won, lost and not-eligible candidates. The status can also be changed from the candidate profile.
+
 ## Settings (admin)
 
 **Paramètres** lets an admin change, without touching code:
@@ -153,11 +196,16 @@ src/
     login/           Login page
     (app)/           Pages behind the login: dashboard, candidates, users, upcoming modules
     apply/           Public candidate web form
+    offre/           Candidate's personalised offer page (public link from emails)
+    desinscription/  Unsubscribe page
+    api/t/           Email open and click tracking
+    api/cron/        Daily scheduler that sends due emails
     api/intake/      Intake API for automated sources
     actions/         Server actions (login, language, candidates, CV import, settings)
   components/        Shared UI (sidebar, badges, timeline, charts)
   lib/
     engine/          CV processing: text extraction, contact parsing, OpenAI and demo analysis, pipeline
+    nurture/         Email sequences: default templates, rendering, sending, engagement rules
     rules.ts         Scoring, eligibility, follow-up tracks and "Purchase Ready" rules
     pipeline.ts      Pipeline statuses and phases
     i18n/            French and English texts

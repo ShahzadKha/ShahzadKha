@@ -16,9 +16,9 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   const items: NavItem[] = [
     { href: "/", label: t.nav.dashboard },
     { href: "/candidates", label: t.nav.candidates },
-    { href: "/pipeline", label: t.nav.pipeline, soon: true },
+    { href: "/pipeline", label: t.nav.pipeline },
     { href: "/sdr", label: t.nav.sdr, soon: true },
-    { href: "/sequences", label: t.nav.sequences, soon: true },
+    ...(user.role !== "SDR" ? [{ href: "/sequences", label: t.nav.sequences }] : []),
     ...(user.role === "ADMIN"
       ? [
           { href: "/users", label: t.nav.users },
@@ -65,7 +65,8 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
             </form>
           </div>
         </header>
-        <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-8">{children}</main>
+        {/* Pages marked data-wide (the pipeline board) use the full width */}
+        <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 has-[[data-wide]]:max-w-none sm:px-8">{children}</main>
       </div>
     </div>
   );

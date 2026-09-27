@@ -6,8 +6,17 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const session = await decryptSession(request.cookies.get(SESSION_COOKIE)?.value);
 
-  // Public: candidate web form and the intake API (it checks its own API key)
-  if (pathname === "/apply" || pathname === "/api/intake") return NextResponse.next();
+  // Public: candidate web form, offer and unsubscribe pages, email tracking, and APIs that check their own key
+  if (
+    pathname === "/apply" ||
+    pathname === "/api/intake" ||
+    pathname.startsWith("/offre/") ||
+    pathname.startsWith("/desinscription/") ||
+    pathname.startsWith("/api/t/") ||
+    pathname.startsWith("/api/cron/")
+  ) {
+    return NextResponse.next();
+  }
 
   if (pathname === "/login") {
     return session ? NextResponse.redirect(new URL("/", request.url)) : NextResponse.next();

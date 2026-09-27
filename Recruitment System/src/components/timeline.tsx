@@ -1,6 +1,9 @@
 import clsx from "clsx";
 import {
   AlertTriangle,
+  BellOff,
+  PlayCircle,
+  StopCircle,
   Bot,
   CreditCard,
   Eye,
@@ -39,6 +42,9 @@ const ICON: Record<EventType, LucideIcon> = {
   EMAIL_CLICKED: MousePointerClick,
   EMAIL_REPLIED: MessageSquareReply,
   PRICE_VIEWED: Eye,
+  UNSUBSCRIBED: BellOff,
+  SEQUENCE_STARTED: PlayCircle,
+  SEQUENCE_ENDED: StopCircle,
   SDR_ASSIGNED: UserCheck,
   CALL_LOGGED: Phone,
   PAYMENT_CONFIRMED: CreditCard,

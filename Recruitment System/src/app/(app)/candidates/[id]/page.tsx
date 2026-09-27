@@ -11,8 +11,11 @@ import { SubmitButton } from "@/components/submit-button";
 import { getDictionary } from "@/lib/i18n";
 import { formatDate, formatDateTime, formatMoney, initials } from "@/lib/format";
 import { addNote } from "@/app/actions/candidates";
-import { Avatar, Card, ScorePill, StatusBadge, buttonClass, inputClass } from "@/components/ui";
+import { Avatar, Card, ScorePill, StatusBadge, buttonClass, inputClass, selectClass } from "@/components/ui";
 import { Timeline } from "@/components/timeline";
+import { NurtureCard } from "@/components/nurture-card";
+import { changeStatus } from "@/app/actions/nurture";
+import { STATUS_ORDER } from "@/lib/pipeline";
 
 export default async function CandidatePage({ params }: PageProps<"/candidates/[id]">) {
   const user = await requireUser();
@@ -59,7 +62,18 @@ export default async function CandidatePage({ params }: PageProps<"/candidates/[
             {c.currentTitle ?? "—"} · {t.sources[c.source]} · {t.profile.created} {formatDate(c.createdAt, locale)}
           </p>
         </div>
-        <StatusBadge status={c.status} label={t.statuses[c.status]} />
+        <div className="flex flex-col items-end gap-2">
+          <StatusBadge status={c.status} label={t.statuses[c.status]} />
+          <form action={changeStatus.bind(null, c.id)} className="flex items-center gap-2">
+            <label htmlFor="status" className="sr-only">{t.nurture.changeStatus}</label>
+            <select id="status" name="status" defaultValue={c.status} className={`${selectClass} py-1 text-xs`}>
+              {STATUS_ORDER.map((s) => (
+                <option key={s} value={s}>{t.statuses[s]}</option>
+              ))}
+            </select>
+            <SubmitButton className={`${buttonClass.secondary} px-2.5 py-1 text-xs`}>{t.nurture.move}</SubmitButton>
+          </form>
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -189,6 +203,8 @@ export default async function CandidatePage({ params }: PageProps<"/candidates/[
               </ul>
             </Card>
           )}
+
+          {c.eligible && <NurtureCard candidate={c} t={t} locale={locale} />}
 
           <Card title={t.profile.cv}>
             <dl className="grid gap-4 text-sm sm:grid-cols-2">

@@ -60,6 +60,13 @@ enum AnalysisState {
   FAILED
 }
 
+enum EnrollmentStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED // every email sent
+  STOPPED // replied, unsubscribed, won/lost, or stopped by a person
+}
+
 enum EventType {
   CREATED
   UPDATED
@@ -74,6 +81,9 @@ enum EventType {
   EMAIL_CLICKED
   EMAIL_REPLIED
   PRICE_VIEWED
+  UNSUBSCRIBED
+  SEQUENCE_STARTED
+  SEQUENCE_ENDED
   SDR_ASSIGNED
   CALL_LOGGED
   PAYMENT_CONFIRMED
@@ -130,6 +140,8 @@ model Candidate {
   cvFile          CvFile?
   motivation      String? // message written by the candidate (web form)
   consentAt       DateTime? // GDPR consent given on the web form
+  unsubscribedAt  DateTime? // clicked "unsubscribe": no more emails
+  publicToken     String    @unique @default(uuid()) // for the candidate's offer and unsubscribe pages
 
   // AI analysis (step 6–8)
   persona       String?
@@ -161,11 +173,77 @@ model Candidate {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  events CandidateEvent[]
+  events     CandidateEvent[]
+  enrollment Enrollment?
+  emails     EmailMessage[]
 
   @@index([status])
   @@index([globalScore])
   @@index([phoneKey])
+}
+
+// One email sequence per follow-up track (diagram steps 10–17)
+model EmailSequence {
+  id          String       @id @default(cuid())
+  track       RoutingTrack @unique
+  name        String
+  active      Boolean      @default(true)
+  steps       EmailStep[]
+  enrollments Enrollment[]
+  updatedAt   DateTime     @updatedAt
+}
+
+model EmailStep {
+  id         String         @id @default(cuid())
+  sequenceId String
+  sequence   EmailSequence  @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  order      Int // 1, 2, 3…
+  dayOffset  Int // days after the first email (0 = sent right away)
+  subject    String
+  body       String // plain text with {{variables}}
+  isOffer    Boolean        @default(false) // contains the personalised offer link → status OFFER_SENT
+  messages   EmailMessage[]
+
+  @@unique([sequenceId, order])
+}
+
+// A candidate following a sequence
+model Enrollment {
+  id          String           @id @default(cuid())
+  candidateId String           @unique
+  candidate   Candidate        @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  sequenceId  String
+  sequence    EmailSequence    @relation(fields: [sequenceId], references: [id])
+  status      EnrollmentStatus @default(ACTIVE)
+  stepsSent   Int              @default(0)
+  startedAt   DateTime         @default(now())
+  nextSendAt  DateTime?
+  endedAt     DateTime?
+  endReason   String?
+
+  @@index([status, nextSendAt])
+}
+
+// Every email sent to a candidate, with tracking
+model EmailMessage {
+  id          String     @id @default(cuid())
+  token       String     @unique @default(uuid()) // used in tracking links
+  candidateId String
+  candidate   Candidate  @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  stepId      String?
+  step        EmailStep? @relation(fields: [stepId], references: [id], onDelete: SetNull)
+  kind        String     @default("sequence") // "sequence" or "offer"
+  toEmail     String
+  subject     String
+  body        String
+  provider    String // "simulated" or "smtp"
+  sentAt      DateTime   @default(now())
+  openedAt    DateTime?
+  clickedAt   DateTime?
+  repliedAt   DateTime?
+  error       String?
+
+  @@index([candidateId, sentAt])
 }
 
 // Original CV file, stored in the database so the app runs anywhere (Vercel included)
