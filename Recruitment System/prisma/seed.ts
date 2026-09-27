@@ -11,7 +11,7 @@ import { randomUUID } from "node:crypto";
 import type { CandidateSource, CandidateStatus, EventType, RoutingTrack } from "../src/generated/prisma/enums";
 import { DEFAULT_RULES, globalScore as computeGlobal, purchaseReadyConditions, trackFromScore } from "../src/lib/rules";
 import { normalizePhone } from "../src/lib/engine/parse";
-import { DEFAULT_OFFER_EMAIL, DEFAULT_SEQUENCES, type DefaultStep } from "../src/lib/nurture/defaults";
+import { DEFAULT_ONBOARDING, DEFAULT_OFFER_EMAIL, DEFAULT_PAYMENT_EMAIL, DEFAULT_SEQUENCES, type DefaultStep } from "../src/lib/nurture/defaults";
 import { renderEmail } from "../src/lib/nurture/render";
 import { canAdvance, shouldRecycle } from "../src/lib/nurture/status";
 
@@ -88,7 +88,7 @@ const APP_URL = (process.env.APP_URL || "http://localhost:3000").replace(/\/$/, 
 // Story each demo candidate goes through, and how many of each
 type Story =
   | "NEW_CV" | "CV_PARSED" | "NOT_ELIGIBLE" | "EMAIL_1_SENT" | "ENGAGED" | "NURTURE" | "OFFER_SENT"
-  | "PRICE_VIEWED" | "PURCHASE_READY" | "SDR_ASSIGNED" | "CALL_COMPLETED" | "WON" | "LOST_CALL"
+  | "PRICE_VIEWED" | "SDR_ASSIGNED" | "CALLBACK" | "CALL_COMPLETED" | "WON" | "WON_OLD" | "LOST_CALL"
   | "LOST_REPLY" | "LOST_UNSUB";
 
 const DISTRIBUTION: [Story, number][] = [
@@ -100,14 +100,18 @@ const DISTRIBUTION: [Story, number][] = [
   ["NURTURE", 4],
   ["OFFER_SENT", 4],
   ["PRICE_VIEWED", 3],
-  ["PURCHASE_READY", 3],
-  ["SDR_ASSIGNED", 3],
+  ["SDR_ASSIGNED", 4],
+  ["CALLBACK", 1],
   ["CALL_COMPLETED", 2],
-  ["WON", 6],
+  ["WON", 4],
+  ["WON_OLD", 2],
   ["LOST_CALL", 1],
   ["LOST_REPLY", 1],
   ["LOST_UNSUB", 1],
 ];
+
+// Stories that reach an SDR (purchase ready → handoff)
+const CLOSING_STORIES: Story[] = ["SDR_ASSIGNED", "CALLBACK", "CALL_COMPLETED", "WON", "WON_OLD", "LOST_CALL"];
 
 // Track (score band) to aim for, so each story is realistic
 function targetTrack(story: Story): RoutingTrack {
@@ -136,7 +140,7 @@ const BAND_MID: Record<RoutingTrack, [number, number]> = {
 
 type SimEvent = { type: EventType; title: string; detail?: string | null; toStatus?: CandidateStatus; actorId?: string | null; t: number };
 type SimMessage = {
-  token: string; stepId: string | null; kind: "sequence" | "offer"; subject: string; body: string; t: number;
+  token: string; stepId: string | null; kind: "sequence" | "offer" | "payment"; subject: string; body: string; t: number;
   openedAt?: number; clickedAt?: number; repliedAt?: number;
 };
 
@@ -145,7 +149,14 @@ class Sim {
   status: CandidateStatus;
   events: SimEvent[] = [];
   messages: SimMessage[] = [];
-  enrollment: null | { status: "ACTIVE" | "COMPLETED" | "STOPPED"; startedAt: number; stepsSent: number; endedAt?: number; endReason?: string } = null;
+  enrollment: null | {
+    sequenceId: string; steps: { dayOffset: number }[];
+    status: "ACTIVE" | "COMPLETED" | "STOPPED"; startedAt: number; stepsSent: number; endedAt?: number; endReason?: string;
+  } = null;
+  tasks: { sdrId: string; kind: string; status: "OPEN" | "DONE" | "CANCELLED"; dueAt: number; createdAt: number; completedAt?: number; outcome?: string; notes?: string }[] = [];
+  payment: { amount: number; t: number } | null = null;
+  feedback: { nps: number; comment: string | null; publishConsent: boolean; t: number } | null = null;
+  notifications: { userId: string; title: string; body: string | null; link: string; t: number; read: boolean }[] = [];
   interestConfirmed = false;
   priceViewed = false;
   timingDays: number | null = null;
@@ -167,24 +178,29 @@ class Sim {
     this.status = to;
     this.event({ type: "STATUS_CHANGED", title, detail, toStatus: to, t, actorId });
   }
-  send(template: { subject: string; body: string }, t: number, meta: { stepId: string | null; kind: "sequence" | "offer" }) {
+  send(template: { subject: string; body: string }, t: number, meta: { stepId: string | null; kind: "sequence" | "offer" | "payment" }) {
     const token = randomUUID();
-    const email = renderEmail(template, { ...this.vars, lien_offre: `${APP_URL}/api/t/c/${token}` }, {
+    const email = renderEmail(template, {
+      ...this.vars,
+      lien_offre: `${APP_URL}/api/t/c/${token}`,
+      lien_paiement: `${APP_URL}/paiement/${this.publicToken}`,
+      lien_avis: `${APP_URL}/avis/${this.publicToken}`,
+    }, {
       unsubscribe: `${APP_URL}/desinscription/${this.publicToken}`,
     });
     this.messages.push({ token, stepId: meta.stepId, kind: meta.kind, subject: email.subject, body: email.text, t });
     this.event({ type: "EMAIL_SENT", title: "Email envoyé", detail: email.subject, t });
     return this.messages.length - 1;
   }
-  startSequence(name: string, t: number) {
-    this.enrollment = { status: "ACTIVE", startedAt: t, stepsSent: 0 };
-    this.event({ type: "SEQUENCE_STARTED", title: "Séquence démarrée", detail: name, t });
+  startSequence(seq: { id: string; name: string; steps: { dayOffset: number }[] }, t: number, title = "Séquence démarrée") {
+    this.enrollment = { sequenceId: seq.id, steps: seq.steps, status: "ACTIVE", startedAt: t, stepsSent: 0 };
+    this.event({ type: "SEQUENCE_STARTED", title, detail: seq.name, t });
   }
   sendStep(step: DefaultStep & { id: string }, index: number, t: number, sequenceName: string) {
     this.send(step, t, { stepId: step.id, kind: "sequence" });
     this.enrollment!.stepsSent++;
     if (index === 0) this.advance("EMAIL_1_SENT", t + 1, "Email 1 envoyé", sequenceName);
-    if (step.isOffer) this.advance("OFFER_SENT", t + 2, "Offre envoyée", step.subject);
+    if (step.isOffer) this.advance("OFFER_SENT", t + 2, "Offre envoyée", this.messages[this.messages.length - 1].subject);
   }
   open(i: number, t: number) {
     const m = this.messages[i];
@@ -238,6 +254,42 @@ class Sim {
     const c = purchaseReadyConditions({ fitScore: this.fit, eligible: true, interestConfirmed: true, priceViewed: this.priceViewed, timingDays: timing }, DEFAULT_RULES);
     if (c.fit && c.interest && c.price && c.timing) this.advance("PURCHASE_READY", t + 2, "Prêt à acheter", "4/4 conditions remplies");
   }
+  // Closing (mirrors src/lib/closing/engine.ts)
+  assign(sdr: { id: string; name: string }, t: number, candidateName: string) {
+    this.stop(t, "Transmis au SDR");
+    this.tasks.push({ sdrId: sdr.id, kind: "closing", status: "OPEN", dueAt: t + 24 * HOUR, createdAt: t });
+    this.advance("SDR_ASSIGNED", t + 1, "Assigné à un SDR", sdr.name, "SDR_ASSIGNED");
+    this.notifications.push({ userId: sdr.id, title: `Nouveau candidat à appeler : ${candidateName}`, body: `Prêt à acheter — ${this.vars.produit}`, link: "", t, read: false });
+  }
+  closeTasks(t: number, outcome: string, notes?: string) {
+    for (const task of this.tasks.filter((x) => x.status === "OPEN")) Object.assign(task, { status: "DONE", completedAt: t, outcome, notes });
+  }
+  paymentLink(t: number) {
+    this.send(DEFAULT_PAYMENT_EMAIL, t, { stepId: null, kind: "payment" });
+    this.event({ type: "PAYMENT_LINK_SENT", title: "Lien de paiement envoyé", detail: this.messages[this.messages.length - 1].subject, t: t + 1 });
+  }
+  pay(t: number, amount: number, onboarding: { id: string; name: string; steps: (DefaultStep & { id: string })[] }, sdrId: string | null, candidateName: string) {
+    this.payment = { amount, t };
+    this.closeTasks(t, "paid");
+    this.status = "WON";
+    this.event({ type: "PAYMENT_CONFIRMED", title: "Paiement confirmé", detail: `Paiement démo — ${this.vars.produit} (${amount} €)`, toStatus: "WON", t });
+    if (sdrId) this.notifications.push({ userId: sdrId, title: `Vente gagnée : ${candidateName}`, body: `${this.vars.produit} (${amount} €)`, link: "", t, read: true });
+    this.startSequence(onboarding, t + 1000, "Onboarding démarré");
+  }
+  sendOnboardingUntil(onboarding: { steps: (DefaultStep & { id: string })[] }, vNow: number) {
+    const e = this.enrollment!;
+    while (e.stepsSent < onboarding.steps.length && e.startedAt + onboarding.steps[e.stepsSent].dayOffset * DAY <= vNow) {
+      const step = onboarding.steps[e.stepsSent];
+      this.send(step, e.startedAt + step.dayOffset * DAY + (e.stepsSent ? HOUR : 0), { stepId: step.id, kind: "sequence" });
+      e.stepsSent++;
+    }
+    const last = onboarding.steps[onboarding.steps.length - 1];
+    if (e.stepsSent === onboarding.steps.length && e.startedAt + (last.dayOffset + 2) * DAY <= vNow) {
+      Object.assign(e, { status: "COMPLETED", endedAt: e.startedAt + (last.dayOffset + 2) * DAY, endReason: "Séquence terminée" });
+      this.event({ type: "SEQUENCE_ENDED", title: "Séquence terminée", detail: "Tous les emails ont été envoyés", t: e.endedAt! });
+    }
+  }
+
   unsubscribe(t: number) {
     this.unsubscribedAt = t;
     this.event({ type: "UNSUBSCRIBED", title: "Désinscription", detail: "Ne reçoit plus d'emails", t });
@@ -250,6 +302,10 @@ const rand = (min: number, max: number) => faker.number.float({ min, max });
 
 async function main() {
   console.log("Resetting demo data…");
+  await db.notification.deleteMany();
+  await db.feedback.deleteMany();
+  await db.payment.deleteMany();
+  await db.callTask.deleteMany();
   await db.emailMessage.deleteMany();
   await db.enrollment.deleteMany();
   await db.emailStep.deleteMany();
@@ -296,6 +352,16 @@ async function main() {
     sequences.set(track, { id: seq.id, name: seq.name, steps: seq.steps.map((s) => ({ ...s, isOffer: s.isOffer })) });
   }
 
+  const onboardingSeq = await db.emailSequence.create({
+    data: {
+      kind: "ONBOARDING",
+      name: DEFAULT_ONBOARDING.name,
+      steps: { create: DEFAULT_ONBOARDING.steps.map((s, i) => ({ order: i + 1, dayOffset: s.dayOffset, subject: s.subject, body: s.body })) },
+    },
+    include: { steps: { orderBy: { order: "asc" } } },
+  });
+  const onboarding = { id: onboardingSeq.id, name: onboardingSeq.name, steps: onboardingSeq.steps };
+
   const sources: CandidateSource[] = ["EMAIL", "WEB_FORM", "WEB_FORM", "CSV_IMPORT", "FILE_DROP", "MANUAL"];
   const now = Date.now();
   let sdrTurn = 0;
@@ -335,7 +401,7 @@ async function main() {
         } else {
           const want = targetTrack(story);
           const target = faker.number.int({ min: BAND_MID[want][0], max: BAND_MID[want][1] });
-          const needsPR = ["PURCHASE_READY", "SDR_ASSIGNED", "CALL_COMPLETED", "WON", "LOST_CALL"].includes(story);
+          const needsPR = CLOSING_STORIES.includes(story);
           fitScore = Math.min(97, Math.max(needsPR ? 74 : 55, target + faker.number.int({ min: -4, max: 8 })));
           needScore = Math.min(95, Math.max(30, target + faker.number.int({ min: -10, max: 10 })));
           intentScore = Math.min(98, Math.max(10, Math.round((target * 100 - fitScore * 50 - needScore * 25) / 25)));
@@ -376,7 +442,7 @@ async function main() {
         const seq = sequences.get(track)!;
         const steps = seq.steps;
         const tE = t + 2000;
-        sim.startSequence(seq.name, tE);
+        sim.startSequence(seq, tE);
         const firstOffer = steps.findIndex((s) => s.isOffer);
         const sendUntil = (limitDays: number) => {
           while (sim.enrollment!.status === "ACTIVE" && sim.enrollment!.stepsSent < steps.length && steps[sim.enrollment!.stepsSent].dayOffset * DAY <= limitDays * DAY) {
@@ -391,7 +457,7 @@ async function main() {
           return rand(a + 0.1, Math.max(a + 0.2, b - 0.1));
         };
 
-        const endorse = ["SDR_ASSIGNED", "CALL_COMPLETED", "WON", "LOST_CALL", "PURCHASE_READY", "PRICE_VIEWED", "OFFER_SENT", "LOST_REPLY"].includes(story);
+        const endorse = [...CLOSING_STORIES, "PRICE_VIEWED", "OFFER_SENT", "LOST_REPLY"].includes(story);
 
         if (story === "EMAIL_1_SENT") {
           sendUntil(0);
@@ -448,23 +514,50 @@ async function main() {
                 vNow = t + rand(0.2, 2) * DAY;
               }
             }
-            if (["SDR_ASSIGNED", "CALL_COMPLETED", "WON", "LOST_CALL"].includes(story)) {
+            if (CLOSING_STORIES.includes(story)) {
               sdr = sdrs[sdrTurn++ % sdrs.length];
-              t += rand(5, 60) * 60_000;
-              sim.advance("SDR_ASSIGNED", t, "Assigné à un SDR", sdr.name, "SDR_ASSIGNED");
-              vNow = t + rand(0.1, 2) * DAY;
-              if (story !== "SDR_ASSIGNED") {
-                t += rand(1, 3) * DAY;
-                sim.advance("CALL_COMPLETED", t, "Appel de closing", `Appel de ${faker.number.int({ min: 15, max: 40 })} min — ${faker.helpers.arrayElement(["question sur le financement CPF", "hésitation sur le calendrier", "très motivé(e), attend le lien de paiement"])}`, "CALL_LOGGED", sdr.id);
-                vNow = t + rand(0.2, 2) * DAY;
-                if (story === "WON") {
-                  t += rand(2, 48) * HOUR;
-                  sim.advance("WON", t, "Paiement confirmé", `ThriveCart — ${product.name} (${product.price} €)`, "PAYMENT_CONFIRMED");
-                  vNow = t + rand(0.5, 15) * DAY;
-                } else if (story === "LOST_CALL") {
-                  t += rand(1, 4) * DAY;
-                  sim.advance("LOST", t, "Perdu", faker.helpers.arrayElement(LOST_REASONS), "STATUS_CHANGED", sdr.id);
+              const who = `${firstName} ${lastName}`;
+              t += rand(2, 20) * 1000;
+              sim.assign(sdr, t, who);
+              // Some calls are due soon, some are already overdue
+              vNow = t + (story === "SDR_ASSIGNED" ? (i === 0 ? rand(1.2, 1.6) : rand(0.1, 0.9)) : rand(0.2, 1)) * DAY;
+              if (story === "CALLBACK") {
+                t += rand(3, 20) * HOUR;
+                sim.closeTasks(t, "callback", "Pas de réponse, messagerie");
+                sim.event({ type: "CALL_LOGGED", title: "Rappel planifié", detail: "Appel — pas de réponse, messagerie", t, actorId: sdr.id });
+                sim.tasks.push({ sdrId: sdr.id, kind: "callback", status: "OPEN", dueAt: t + rand(20, 40) * HOUR, createdAt: t });
+                vNow = t + rand(1, 12) * HOUR;
+              } else if (story !== "SDR_ASSIGNED") {
+                t += rand(3, 30) * HOUR;
+                const blocker = faker.helpers.arrayElement(["blocage : Financement", "blocage : Date de démarrage", "blocage : Prix"]);
+                const note = faker.helpers.arrayElement(["question sur le financement CPF", "hésitation sur le calendrier", "très motivé(e), attend le lien de paiement"]);
+                const summary = `Appel de ${faker.number.int({ min: 15, max: 40 })} min — ${blocker} — ${note}`;
+                if (story === "LOST_CALL") {
+                  sim.closeTasks(t, "lost", note);
+                  sim.event({ type: "CALL_LOGGED", title: "Appel — perdu", detail: summary, t, actorId: sdr.id });
+                  sim.set("LOST", t + 1, "Déplacé manuellement", null, sdr.id);
+                  sim.event({ type: "NOTE", title: "Raison de la perte", detail: faker.helpers.arrayElement(LOST_REASONS), t: t + 2, actorId: sdr.id });
                   vNow = t + rand(0.5, 10) * DAY;
+                } else {
+                  sim.closeTasks(t, "payment_link", note);
+                  sim.advance("CALL_COMPLETED", t, "Appel de closing", summary, "CALL_LOGGED", sdr.id);
+                  sim.paymentLink(t + 60_000);
+                  vNow = t + rand(0.2, 2) * DAY;
+                  if (story === "WON" || story === "WON_OLD") {
+                    t += rand(1, 30) * HOUR;
+                    sim.pay(t, product.price, onboarding, sdr.id, who);
+                    vNow = story === "WON_OLD" ? t + rand(93, 110) * DAY : t + rand(0.5, 40) * DAY;
+                    sim.sendOnboardingUntil(onboarding, vNow);
+                    if (story === "WON_OLD") {
+                      const nps = faker.helpers.arrayElement([9, 10, 8]);
+                      const comment = [
+                        "Formation très concrète, j'ai trouvé un poste deux mois après la certification.",
+                        "Accompagnement au top, les projets pratiques font vraiment la différence.",
+                      ][i % 2];
+                      sim.feedback = { nps, comment, publishConsent: true, t: t + 91 * DAY };
+                      sim.event({ type: "FEEDBACK_RECEIVED", title: "Avis reçu", detail: `NPS ${nps}/10 · « ${comment} »`, t: t + 91 * DAY });
+                    }
+                  }
                 }
               }
             }
@@ -491,9 +584,8 @@ async function main() {
         });
       }
 
-      const seq = track ? sequences.get(track)! : null;
       const e = sim.enrollment;
-      const nextStep = e && seq ? seq.steps[e.stepsSent] : null;
+      const nextStep = e ? e.steps[e.stepsSent] : null;
       const lastT = Math.max(...sim.events.map((x) => x.t));
 
       await db.candidate.create({
@@ -563,29 +655,59 @@ async function main() {
               repliedAt: m.repliedAt != null ? at(m.repliedAt) : null,
             })),
           },
-          enrollment:
-            e && seq
-              ? {
-                  create: {
-                    sequenceId: seq.id,
-                    status: e.status,
-                    stepsSent: e.stepsSent,
-                    startedAt: at(e.startedAt),
-                    nextSendAt: e.status === "ACTIVE" ? at(e.startedAt + (nextStep ? nextStep.dayOffset * DAY : (seq.steps[seq.steps.length - 1].dayOffset + 2) * DAY)) : null,
-                    endedAt: e.endedAt != null ? at(e.endedAt) : null,
-                    endReason: e.endReason ?? null,
-                  },
-                }
-              : undefined,
+          enrollment: e
+            ? {
+                create: {
+                  sequenceId: e.sequenceId,
+                  status: e.status,
+                  stepsSent: e.stepsSent,
+                  startedAt: at(e.startedAt),
+                  nextSendAt: e.status === "ACTIVE" ? at(e.startedAt + (nextStep ? nextStep.dayOffset : e.steps[e.steps.length - 1].dayOffset + 2) * DAY) : null,
+                  endedAt: e.endedAt != null ? at(e.endedAt) : null,
+                  endReason: e.endReason ?? null,
+                },
+              }
+            : undefined,
+          tasks: {
+            create: sim.tasks.map((task) => ({
+              sdrId: task.sdrId,
+              kind: task.kind,
+              status: task.status,
+              dueAt: at(task.dueAt),
+              createdAt: at(task.createdAt),
+              completedAt: task.completedAt != null ? at(task.completedAt) : null,
+              outcome: task.outcome ?? null,
+              notes: task.notes ?? null,
+            })),
+          },
+          payments: sim.payment
+            ? { create: { productId: product.id, amount: sim.payment.amount, provider: "simulated", externalId: `seed-${randomUUID()}`, paidAt: at(sim.payment.t) } }
+            : undefined,
+          feedback: sim.feedback
+            ? { create: { nps: sim.feedback.nps, comment: sim.feedback.comment, publishConsent: sim.feedback.publishConsent, createdAt: at(sim.feedback.t) } }
+            : undefined,
         },
       });
+      if (sim.notifications.length) {
+        const created = await db.candidate.findUniqueOrThrow({ where: { email }, select: { id: true } });
+        await db.notification.createMany({
+          data: sim.notifications.map((n) => ({
+            userId: n.userId,
+            title: n.title,
+            body: n.body,
+            link: n.title.startsWith("Nouveau") ? `/sdr/appel/${created.id}` : `/candidates/${created.id}`,
+            createdAt: at(n.t),
+            readAt: n.read || sim.status !== "SDR_ASSIGNED" ? at(n.t + HOUR) : null,
+          })),
+        });
+      }
       count++;
     }
   }
 
   const byStatus = await db.candidate.groupBy({ by: ["status"], _count: { _all: true } });
   console.log(byStatus.map((s) => `${s.status}: ${s._count._all}`).join(", "));
-  console.log(`Seeded ${count} candidates, ${products.length} products, ${2 + sdrs.length} users, ${sequences.size} sequences.`);
+  console.log(`Seeded ${count} candidates, ${products.length} products, ${2 + sdrs.length} users, ${sequences.size + 1} email sequences.`);
   console.log(`Logins (password demo1234): ${admin.email}, ${sdrs.map((s) => s.email).join(", ")}, ${recruiter.email}`);
 }
 

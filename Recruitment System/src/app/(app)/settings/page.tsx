@@ -3,7 +3,9 @@ import { Bot, ExternalLink, KeyRound } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { getDictionary } from "@/lib/i18n";
-import { aiStatus, getBrand, getScoringRules } from "@/lib/settings";
+import { aiStatus, getBrand, getClosingSettings, getScoringRules } from "@/lib/settings";
+import { SCRIPT_VARIABLES } from "@/lib/nurture/defaults";
+import { saveClosingSettings } from "@/app/actions/closing";
 import { saveBrand, saveProduct, saveRules } from "@/app/actions/settings";
 import { ActionForm } from "@/components/action-form";
 import { Card, PageHeader, inputClass } from "@/components/ui";
@@ -21,13 +23,16 @@ export default async function SettingsPage() {
   await requireUser(["ADMIN"]);
   const { t } = await getDictionary();
   const s = t.settings;
-  const [brand, rules, products] = await Promise.all([
+  const [brand, rules, closing, products] = await Promise.all([
     getBrand(),
     getScoringRules(),
+    getClosingSettings(),
     db.product.findMany({ orderBy: { createdAt: "asc" } }),
   ]);
   const ai = aiStatus();
   const apiEnabled = Boolean(process.env.INTAKE_API_KEY);
+  const thrivecartEnabled = Boolean(process.env.THRIVECART_SECRET);
+  const cs = t.closingSettings;
   const formLabels = { save: s.save, saved: s.saved, invalid: s.invalid };
 
   return (
@@ -60,6 +65,12 @@ export default async function SettingsPage() {
               <span className="text-slate-700">{s.api}</span>
               <span className={`inline-flex items-center gap-1 text-xs font-medium ${apiEnabled ? "text-emerald-700" : "text-slate-500"}`}>
                 <KeyRound className="size-3.5" /> {apiEnabled ? s.apiOn : s.apiOff}
+              </span>
+            </li>
+            <li className="flex items-center justify-between gap-3">
+              <span className="text-slate-700">{cs.thrivecart} <code className="text-xs text-slate-500">/api/webhooks/thrivecart</code></span>
+              <span className={`inline-flex items-center gap-1 text-xs font-medium ${thrivecartEnabled ? "text-emerald-700" : "text-slate-500"}`}>
+                <KeyRound className="size-3.5" /> {thrivecartEnabled ? cs.thrivecartOn : cs.thrivecartOff}
               </span>
             </li>
             <li>
@@ -117,6 +128,27 @@ export default async function SettingsPage() {
           </ActionForm>
         </Card>
 
+        <Card title={cs.title} hint={cs.hint} className="lg:col-span-2">
+          <ActionForm action={saveClosingSettings} labels={formLabels}>
+            <div className="space-y-4 text-sm">
+              <label className="flex items-center gap-2 text-slate-700">
+                <input type="checkbox" name="autoAssign" defaultChecked={closing.autoAssign} className="size-4 rounded border-slate-300" />
+                {cs.autoAssign}
+              </label>
+              <div className="max-w-48">
+                <NumberField name="callSlaHours" label={cs.sla} value={closing.callSlaHours} max={168} />
+              </div>
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium text-slate-600">{cs.script}</span>
+                <textarea name="callScript" required rows={14} maxLength={10000} defaultValue={closing.callScript} className={`${inputClass} font-mono text-xs leading-relaxed`} />
+                <span className="mt-1 block text-xs text-slate-500">
+                  {cs.scriptHint} {SCRIPT_VARIABLES.map((v) => <code key={v} className="mr-1 rounded bg-slate-100 px-1">{`{{${v}}}`}</code>)}
+                </span>
+              </label>
+            </div>
+          </ActionForm>
+        </Card>
+
         <Card title={s.products} hint={s.productsHint} className="lg:col-span-2">
           <div className="space-y-4">
             {[...products, null].map((p) => (
@@ -144,6 +176,10 @@ export default async function SettingsPage() {
                   <label className="block text-sm md:col-span-5">
                     <span className="mb-1 block text-xs font-medium text-slate-600">{s.productKeywords}</span>
                     <input name="keywords" defaultValue={p?.keywords.join(", ")} className={inputClass} />
+                  </label>
+                  <label className="block text-sm md:col-span-5">
+                    <span className="mb-1 block text-xs font-medium text-slate-600">{cs.checkoutUrl}</span>
+                    <input name="checkoutUrl" type="url" placeholder="https://…thrivecart.com/…" defaultValue={p?.checkoutUrl ?? ""} className={inputClass} />
                   </label>
                   <label className="flex items-end gap-2 pb-2 text-sm text-slate-700">
                     <input type="checkbox" name="active" defaultChecked={p?.active ?? true} className="size-4 rounded border-slate-300" />

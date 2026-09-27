@@ -1,7 +1,8 @@
 import type { RoutingTrack } from "@/generated/prisma/enums";
 
 // Default email sequences, one per follow-up track. Admins edit them on the "Séquences email" page.
-// Variables: {{prenom}}, {{nom}}, {{produit}}, {{prix}}, {{poste}}, {{marque}}, {{lien_offre}}
+// Variables: {{prenom}}, {{nom}}, {{produit}}, {{prix}}, {{poste}}, {{marque}}, {{lien_offre}},
+// {{lien_paiement}} and {{lien_avis}}
 
 export type DefaultStep = { dayOffset: number; subject: string; body: string; isOffer?: boolean };
 
@@ -135,4 +136,54 @@ export const DEFAULT_OFFER_EMAIL = {
   body: "Bonjour {{prenom}},\n\nMerci pour votre réponse ! Voici votre offre personnalisée pour la formation {{produit}} : programme, calendrier et tarif ({{prix}}).\n\n{{lien_offre}}\n\nIndiquez-y quand vous souhaitez démarrer, un conseiller vous rappelle rapidement." + SIGNATURE,
 };
 
-export const TEMPLATE_VARIABLES = ["prenom", "nom", "produit", "prix", "poste", "marque", "lien_offre"] as const;
+// Sent by the SDR after the closing call (diagram step 22: redirection ThriveCart)
+export const DEFAULT_PAYMENT_EMAIL = {
+  subject: "{{prenom}}, votre lien d'inscription — {{produit}}",
+  body: "Bonjour {{prenom}},\n\nMerci pour notre échange ! Comme convenu, voici votre lien d'inscription sécurisé à la formation {{produit}} ({{prix}}) :\n\n{{lien_paiement}}\n\nVotre place est réservée dès la confirmation du paiement." + SIGNATURE,
+};
+
+// After payment (diagram steps 24–26)
+export const DEFAULT_ONBOARDING: { name: string; steps: DefaultStep[] } = {
+  name: "Onboarding et post-achat",
+  steps: [
+    {
+      dayOffset: 0,
+      subject: "Bienvenue dans la formation {{produit}} !",
+      body: "Bonjour {{prenom}},\n\nFélicitations et bienvenue ! Votre inscription à la formation {{produit}} est confirmée.\n\nProchaines étapes :\n1. Vous recevrez vos accès à la plateforme de formation sous 24 h.\n2. Bloquez 30 minutes pour découvrir le programme et le planning.\n3. Rejoignez la communauté des apprenants pour poser vos questions.\n\nNous sommes ravis de vous accompagner." + SIGNATURE,
+    },
+    {
+      dayOffset: 60,
+      subject: "{{prenom}}, préparons la suite : CV, LinkedIn et entretiens",
+      body: "Bonjour {{prenom}},\n\nVous avancez bien dans votre formation {{produit}}. C'est le bon moment pour préparer la suite : mettre à jour votre CV, optimiser votre profil LinkedIn et vous entraîner aux entretiens.\n\nRépondez à cet email pour réserver votre séance de coaching offerte." + SIGNATURE,
+    },
+    {
+      dayOffset: 90,
+      subject: "Votre avis compte : 1 minute pour nous aider",
+      body: "Bonjour {{prenom}},\n\nVotre avis sur la formation {{produit}} nous aide à nous améliorer et aide d'autres personnes à se lancer. Cela prend moins d'une minute :\n\n{{lien_avis}}\n\nEt si un proche a un projet comme le vôtre, vous pouvez aussi nous le recommander." + SIGNATURE,
+    },
+  ],
+};
+
+// Closing call script shown on the SDR call sheet (diagram step 20). Lines starting with "#" are section titles.
+export const DEFAULT_CALL_SCRIPT = `# 1. Ouverture
+Bonjour {{prenom}}, c'est {{sdr}} de {{marque}}. Vous avez demandé à être rappelé(e) au sujet de la formation {{produit}}. Vous avez 10 minutes ?
+
+# 2. Découverte
+• Quel poste visez-vous après la formation ?
+• Qu'est-ce qui vous décide à vous former maintenant ?
+• Qu'est-ce qui pourrait vous empêcher de démarrer sous {{delai}} jours ?
+
+# 3. Présentation
+Reliez la formation à son objectif. Point à travailler selon l'analyse : {{ecart}}.
+Rappelez le format, le calendrier et le prix ({{prix}}).
+
+# 4. Lever le dernier blocage
+• « C'est cher » → présentez les solutions de financement et le paiement en plusieurs fois s'il existe.
+• « Je n'ai pas le temps » → rappelez le rythme et la flexibilité du programme.
+• « Je ne suis pas sûr(e) du niveau » → son profil a été analysé : il correspond (score {{score}}/100).
+
+# 5. Closing
+« Je vous envoie maintenant le lien d'inscription sécurisé, vous pourrez réserver votre place pour la prochaine session. »`;
+
+export const TEMPLATE_VARIABLES = ["prenom", "nom", "produit", "prix", "poste", "marque", "lien_offre", "lien_paiement", "lien_avis"] as const;
+export const SCRIPT_VARIABLES = ["prenom", "nom", "produit", "prix", "marque", "sdr", "delai", "ecart", "score"] as const;

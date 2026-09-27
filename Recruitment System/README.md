@@ -13,8 +13,8 @@ while keeping the same steps, statuses and routing rules.
 | 1 | Foundation: login and roles, database, demo data, candidate list and profile with timeline, dashboard overview | ✅ Done |
 | 2 | AI engine: CV import (PDF/Word/text), public web form, intake API, deduplication, OpenAI analysis with demo mode, scoring and routing rules, Settings | ✅ Done |
 | 3 | Nurturing: email sequences per track, sending (simulated or SMTP), open/click/reply tracking, candidate offer page, unsubscribe, Purchase Ready detection, pipeline board | ✅ Done |
-| 4 | Closing: SDR workspace, call logging, simulated ThriveCart payment, onboarding | ⏳ Next |
-| 5 | Dashboard and polish: funnel charts, KPIs, settings screens, demo script | |
+| 4 | Closing: automatic SDR handoff, SDR workspace and call sheet with script, payment link (ThriveCart or demo checkout), ThriveCart webhook, onboarding emails, NPS/testimonial page, notifications | ✅ Done |
+| 5 | Dashboard and polish: funnel charts, KPIs, final polish, demo script | ⏳ Next |
 
 ## Tech stack
 
@@ -159,6 +159,34 @@ EMAIL_FROM="contact@your-domain.com"
 Emails are sent by a daily scheduler: `vercel.json` calls `/api/cron/sequences` every morning on
 Vercel (set `CRON_SECRET`). The "Envoyer les emails prévus" button does the same on demand.
 
+## Closing and after the sale (steps 19–26)
+
+1. **Handoff (19)**: when a candidate meets the 4 Purchase Ready conditions, they are assigned to the
+   least busy SDR, who gets a call task (due within 24 h, editable) and a notification (bell in the header).
+   Admins and recruiters can also assign or reassign from the candidate profile.
+2. **Call (20–21)**: **Espace SDR** lists each SDR's calls, most urgent first (overdue in red), with
+   click-to-call. The **call sheet** shows the candidate brief (training, score, timing, AI summary,
+   last reply), the **call script** (editable in Settings) and the result form:
+   - ready to enrol → the **payment link** email is sent (`CALL_COMPLETED`)
+   - no answer → a callback task is scheduled
+   - not now → back to nurture
+   - not interested → lost, with a reason
+3. **Payment (22–23)**: the payment link opens `/paiement/…`. If the training has a **ThriveCart
+   checkout link** (Settings → catalogue), the candidate goes to ThriveCart with their email, name and
+   id pre-filled. Otherwise a **demo checkout** is shown. It never asks for card details.
+   Payment confirmed → `WON`, the SDR is notified.
+4. **After the sale (24–26)**: the onboarding sequence starts: welcome email right away, CV/LinkedIn
+   coaching at day 60, and a request for feedback at day 90 linking to `/avis/…` (NPS 0–10,
+   testimonial with publishing consent, referral of a friend).
+
+### ThriveCart
+
+In ThriveCart, add a webhook to `https://your-app/api/webhooks/thrivecart` and put the same secret in
+`THRIVECART_SECRET`. On `order.success` the app finds the candidate (id passed through the checkout
+link, or email), records the payment once per order, and moves them to `WON`. Amounts are read from
+`order[total]` in cents. **Check this with one real test order**, since it was built from ThriveCart's
+webhook format but not tested against a live ThriveCart account.
+
 ## Pipeline board
 
 **Pipeline** shows one column per status. Drag a card to another column to change the candidate's
@@ -200,12 +228,17 @@ src/
     desinscription/  Unsubscribe page
     api/t/           Email open and click tracking
     api/cron/        Daily scheduler that sends due emails
+    api/webhooks/    ThriveCart payment webhook
+    paiement/        Payment link page (ThriveCart redirect or demo checkout)
+    avis/            NPS, testimonial and referral page
+    (app)/sdr/       SDR workspace and call sheet
     api/intake/      Intake API for automated sources
     actions/         Server actions (login, language, candidates, CV import, settings)
   components/        Shared UI (sidebar, badges, timeline, charts)
   lib/
     engine/          CV processing: text extraction, contact parsing, OpenAI and demo analysis, pipeline
     nurture/         Email sequences: default templates, rendering, sending, engagement rules
+    closing/         SDR handoff, call results, payment, onboarding, feedback
     rules.ts         Scoring, eligibility, follow-up tracks and "Purchase Ready" rules
     pipeline.ts      Pipeline statuses and phases
     i18n/            French and English texts

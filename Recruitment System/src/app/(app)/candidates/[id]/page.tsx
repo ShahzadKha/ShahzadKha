@@ -14,6 +14,7 @@ import { addNote } from "@/app/actions/candidates";
 import { Avatar, Card, ScorePill, StatusBadge, buttonClass, inputClass, selectClass } from "@/components/ui";
 import { Timeline } from "@/components/timeline";
 import { NurtureCard } from "@/components/nurture-card";
+import { ClosingCard } from "@/components/closing-card";
 import { changeStatus } from "@/app/actions/nurture";
 import { STATUS_ORDER } from "@/lib/pipeline";
 
@@ -263,6 +264,7 @@ export default async function CandidatePage({ params }: PageProps<"/candidates/[
         </div>
 
         <div className="space-y-6">
+          {c.eligible && <ClosingCard candidate={c} role={user.role} t={t} locale={locale} />}
           <Card title={t.profile.contact}>
             <ul className="space-y-3 text-sm">
               <li className="flex items-center gap-2 text-slate-700"><Mail className="size-4 text-slate-400" /> {c.email}</li>

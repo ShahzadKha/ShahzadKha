@@ -1,6 +1,8 @@
 import clsx from "clsx";
 import {
   AlertTriangle,
+  Link2,
+  Star,
   BellOff,
   PlayCircle,
   StopCircle,
@@ -47,7 +49,9 @@ const ICON: Record<EventType, LucideIcon> = {
   SEQUENCE_ENDED: StopCircle,
   SDR_ASSIGNED: UserCheck,
   CALL_LOGGED: Phone,
+  PAYMENT_LINK_SENT: Link2,
   PAYMENT_CONFIRMED: CreditCard,
+  FEEDBACK_RECEIVED: Star,
   NOTE: StickyNote,
 };
 
@@ -71,7 +75,7 @@ export function Timeline({ events, t, locale }: { events: TimelineEvent[]; t: Di
             <span
               className={clsx(
                 "relative z-[1] flex size-7 shrink-0 items-center justify-center rounded-full ring-4 ring-white",
-                e.type === "NOTE" ? "bg-amber-100 text-amber-700" : e.type === "ANALYSIS_FAILED" ? "bg-red-100 text-red-700" : e.type === "PAYMENT_CONFIRMED" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600",
+                e.type === "NOTE" ? "bg-amber-100 text-amber-700" : e.type === "ANALYSIS_FAILED" ? "bg-red-100 text-red-700" : e.type === "PAYMENT_CONFIRMED" || e.type === "FEEDBACK_RECEIVED" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600",
               )}
             >
               <Icon className="size-3.5" aria-hidden />

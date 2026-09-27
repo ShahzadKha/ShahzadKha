@@ -6,6 +6,8 @@ import type { CandidateStatus, EventType } from "@/generated/prisma/enums";
 import { appUrl, deliver } from "./mailer";
 import { renderEmail, type TemplateVars } from "./render";
 import { STATUS_RANK, canAdvance, shouldRecycle } from "./status";
+import { DEFAULT_ONBOARDING, DEFAULT_SEQUENCES } from "./defaults";
+import type { RoutingTrack } from "@/generated/prisma/enums";
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -47,12 +49,18 @@ async function templateVars(candidateId: string): Promise<{ vars: TemplateVars; 
       poste: c.currentTitle ?? "",
       marque: brand.name,
       lien_offre: "", // set per message (tracked link)
+      lien_paiement: "",
+      lien_avis: "",
     },
   };
 }
 
 /** Render, send (or simulate) and store one email. */
-async function sendEmail(candidateId: string, template: { subject: string; body: string }, meta: { stepId?: string; kind: "sequence" | "offer" }) {
+export async function sendEmail(
+  candidateId: string,
+  template: { subject: string; body: string },
+  meta: { stepId?: string; kind: "sequence" | "offer" | "payment" },
+) {
   const ctx = await templateVars(candidateId);
   const candidate = await db.candidate.findUnique({ where: { id: candidateId }, select: { publicToken: true } });
   if (!ctx || !candidate) return null;
@@ -62,7 +70,12 @@ async function sendEmail(candidateId: string, template: { subject: string; body:
     data: { candidateId, stepId: meta.stepId, kind: meta.kind, toEmail: ctx.to, subject: "", body: "", provider: "pending" },
   });
   const base = appUrl();
-  const vars = { ...ctx.vars, lien_offre: `${base}/api/t/c/${message.token}` };
+  const vars = {
+    ...ctx.vars,
+    lien_offre: `${base}/api/t/c/${message.token}`,
+    lien_paiement: `${base}/paiement/${candidate.publicToken}`,
+    lien_avis: `${base}/avis/${candidate.publicToken}`,
+  };
   const email = renderEmail(template, vars, {
     unsubscribe: `${base}/desinscription/${candidate.publicToken}`,
     openPixel: `${base}/api/t/o/${message.token}`,
@@ -84,6 +97,30 @@ async function sendEmail(candidateId: string, template: { subject: string; body:
   return { ...message, subject: email.subject, error };
 }
 
+/** Creates the default sequences that are missing (e.g. a database set up before this feature). */
+export async function ensureDefaultSequences() {
+  const existing = await db.emailSequence.findMany({ select: { kind: true, track: true } });
+  for (const [track, def] of Object.entries(DEFAULT_SEQUENCES) as [RoutingTrack, (typeof DEFAULT_SEQUENCES)[RoutingTrack]][]) {
+    if (existing.some((q) => q.track === track)) continue;
+    await db.emailSequence.create({
+      data: {
+        track,
+        name: def.name,
+        steps: { create: def.steps.map((st, i) => ({ order: i + 1, dayOffset: st.dayOffset, subject: st.subject, body: st.body, isOffer: Boolean(st.isOffer) })) },
+      },
+    });
+  }
+  if (!existing.some((q) => q.kind === "ONBOARDING")) {
+    await db.emailSequence.create({
+      data: {
+        kind: "ONBOARDING",
+        name: DEFAULT_ONBOARDING.name,
+        steps: { create: DEFAULT_ONBOARDING.steps.map((st, i) => ({ order: i + 1, dayOffset: st.dayOffset, subject: st.subject, body: st.body })) },
+      },
+    });
+  }
+}
+
 /**
  * Steps 10–11: put an eligible candidate into the sequence of their follow-up track
  * and send the first email right away (day 0).
@@ -100,6 +137,7 @@ export async function enrollCandidate(candidateId: string, opts: Actor & { force
     return { ok: false as const, reason: "no_consent" };
   }
   if (c.enrollment?.status === "ACTIVE") return { ok: false as const, reason: "already_active" };
+  await ensureDefaultSequences();
 
   const sequence = await db.emailSequence.findUnique({
     where: { track: c.routingTrack },
@@ -136,7 +174,7 @@ export async function sendDueSteps(enrollmentId: string, now = new Date()) {
       return sent;
     }
 
-    await sendEmail(e.candidateId, step, { stepId: step.id, kind: "sequence" });
+    const message = await sendEmail(e.candidateId, step, { stepId: step.id, kind: "sequence" });
     sent++;
     const next = steps[e.stepsSent + 1];
     await db.enrollment.update({
@@ -151,7 +189,7 @@ export async function sendDueSteps(enrollmentId: string, now = new Date()) {
       await advanceStatus(e.candidateId, "EMAIL_1_SENT", { title: "Email 1 envoyé", detail: e.sequence.name });
     }
     if (step.isOffer) {
-      await advanceStatus(e.candidateId, "OFFER_SENT", { title: "Offre envoyée", detail: step.subject });
+      await advanceStatus(e.candidateId, "OFFER_SENT", { title: "Offre envoyée", detail: message?.subject ?? null });
     }
   }
   return sent;
@@ -316,7 +354,12 @@ export async function checkPurchaseReady(candidateId: string) {
   const cond = purchaseReadyConditions(c, rules);
   if (!(cond.fit && cond.interest && cond.price && cond.timing)) return false;
   const moved = await advanceStatus(candidateId, "PURCHASE_READY", { title: "Prêt à acheter", detail: "4/4 conditions remplies" });
-  if (moved) await stopEnrollment(candidateId, "Prêt à acheter — transmis au SDR");
+  if (moved) {
+    await stopEnrollment(candidateId, "Prêt à acheter — transmis au SDR");
+    // Step 19: hand over to an SDR (imported lazily: the closing engine also uses this module)
+    const { autoAssignIfEnabled } = await import("@/lib/closing/engine");
+    await autoAssignIfEnabled(candidateId);
+  }
   return moved;
 }
 

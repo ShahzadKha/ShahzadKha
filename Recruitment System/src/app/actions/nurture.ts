@@ -150,11 +150,16 @@ export async function toggleSequence(sequenceId: string, active: boolean) {
 export async function saveEmailSettings(_prev: SettingsState, formData: FormData): Promise<SettingsState> {
   await requireUser(["ADMIN"]);
   const current = await getEmailSettings();
+  const text = (key: keyof typeof current) => (formData.has(key) ? String(formData.get(key)).trim() : current[key]);
+  // The options form is the one with checkboxes; unchecked boxes are simply absent from it
+  const isOptionsForm = formData.has("optionsForm");
   const parsed = EmailSettingsSchema.safeParse({
-    autoEnroll: formData.has("offerSubject") ? current.autoEnroll : formData.get("autoEnroll") === "on",
-    requireConsent: formData.has("offerSubject") ? current.requireConsent : formData.get("requireConsent") === "on",
-    offerSubject: String(formData.get("offerSubject") ?? current.offerSubject).trim(),
-    offerBody: String(formData.get("offerBody") ?? current.offerBody).trim(),
+    autoEnroll: isOptionsForm ? formData.get("autoEnroll") === "on" : current.autoEnroll,
+    requireConsent: isOptionsForm ? formData.get("requireConsent") === "on" : current.requireConsent,
+    offerSubject: text("offerSubject"),
+    offerBody: text("offerBody"),
+    paymentSubject: text("paymentSubject"),
+    paymentBody: text("paymentBody"),
   });
   if (!parsed.success) return { ok: false, at: Date.now() };
   await db.setting.upsert({

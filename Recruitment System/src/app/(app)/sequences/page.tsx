@@ -6,6 +6,7 @@ import { getEmailSettings, getScoringRules } from "@/lib/settings";
 import { TRACKS, trackRangeLabel } from "@/lib/rules";
 import { TEMPLATE_VARIABLES } from "@/lib/nurture/defaults";
 import { emailMode } from "@/lib/nurture/mailer";
+import { ensureDefaultSequences } from "@/lib/nurture/engine";
 import { addStep, deleteStep, saveEmailSettings, saveStep, toggleSequence } from "@/app/actions/nurture";
 import { ActionForm } from "@/components/action-form";
 import { Card, PageHeader, inputClass } from "@/components/ui";
@@ -19,12 +20,19 @@ export default async function SequencesPage() {
   const isAdmin = user.role === "ADMIN";
   const { t } = await getDictionary();
   const s = t.sequences;
+  await ensureDefaultSequences();
   const [sequences, settings, rules] = await Promise.all([
     db.emailSequence.findMany({ include: { steps: { orderBy: { order: "asc" } } } }),
     getEmailSettings(),
     getScoringRules(),
   ]);
   const byTrack = new Map(sequences.map((q) => [q.track, q]));
+  const onboarding = sequences.find((q) => q.kind === "ONBOARDING");
+  // Nurture sequences in track order, then the post-purchase one
+  const blocks = [
+    ...TRACKS.map((track) => ({ q: byTrack.get(track), range: trackRangeLabel(track, rules), hint: t.trackHints[track] })),
+    { q: onboarding, range: null, hint: t.closingSettings.onboardingHint },
+  ];
   const mode = emailMode();
   const formLabels = { save: t.settings.save, saved: t.settings.saved, invalid: t.settings.invalid };
 
@@ -61,6 +69,7 @@ export default async function SequencesPage() {
         </Card>
         <Card title={s.options}>
           <ActionForm action={saveEmailSettings} labels={formLabels}>
+            <input type="hidden" name="optionsForm" value="1" />
             <fieldset disabled={!isAdmin} className="space-y-2 text-sm text-slate-700">
               <label className="flex items-center gap-2">
                 <input type="checkbox" name="autoEnroll" defaultChecked={settings.autoEnroll} className="size-4 rounded border-slate-300" />
@@ -76,8 +85,7 @@ export default async function SequencesPage() {
       </div>
 
       <div className="space-y-4">
-        {TRACKS.map((track, i) => {
-          const q = byTrack.get(track);
+        {blocks.map(({ q, range, hint }, i) => {
           if (!q) return null;
           const st = statsById.get(q.id)!;
           return (
@@ -85,10 +93,10 @@ export default async function SequencesPage() {
               <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-6 gap-y-2 px-5 py-4">
                 <div className="min-w-56 flex-1">
                   <p className="font-semibold text-slate-900">
-                    {q.name} <span className="text-sm font-normal text-slate-500">· {trackRangeLabel(track, rules)}</span>
+                    {q.name} {range && <span className="text-sm font-normal text-slate-500">· {range}</span>}
                   </p>
                   <p className="text-xs text-slate-500">
-                    {q.steps.length} {s.emailsCount} · {t.trackHints[track]}
+                    {q.steps.length} {s.emailsCount} · {hint}
                     {!q.active && <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 font-medium text-slate-600">off</span>}
                   </p>
                 </div>
@@ -172,6 +180,21 @@ export default async function SequencesPage() {
           );
         })}
       </div>
+
+      <Card title={t.closingSettings.paymentEmail} className="mt-6">
+        <ActionForm action={saveEmailSettings} labels={formLabels}>
+          <fieldset disabled={!isAdmin} className="grid gap-3">
+            <label className="block text-sm">
+              <span className="mb-1 block text-xs font-medium text-slate-600">{s.subject}</span>
+              <input name="paymentSubject" required maxLength={200} defaultValue={settings.paymentSubject} className={inputClass} />
+            </label>
+            <label className="block text-sm">
+              <span className="mb-1 block text-xs font-medium text-slate-600">{s.body}</span>
+              <textarea name="paymentBody" required rows={9} maxLength={5000} defaultValue={settings.paymentBody} className={`${inputClass} font-mono text-xs leading-relaxed`} />
+            </label>
+          </fieldset>
+        </ActionForm>
+      </Card>
 
       <Card title={s.offerEmail} className="mt-6">
         <ActionForm action={saveEmailSettings} labels={formLabels}>

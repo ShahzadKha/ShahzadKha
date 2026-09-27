@@ -7,6 +7,7 @@ import { logout } from "@/app/actions/auth";
 import { SidebarNav, type NavItem } from "@/components/sidebar-nav";
 import { LanguageSwitch } from "@/components/language-switch";
 import { Avatar } from "@/components/ui";
+import { NotificationBell } from "@/components/notification-bell";
 
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   const user = await requireUser();
@@ -17,7 +18,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
     { href: "/", label: t.nav.dashboard },
     { href: "/candidates", label: t.nav.candidates },
     { href: "/pipeline", label: t.nav.pipeline },
-    { href: "/sdr", label: t.nav.sdr, soon: true },
+    { href: "/sdr", label: t.nav.sdr },
     ...(user.role !== "SDR" ? [{ href: "/sequences", label: t.nav.sequences }] : []),
     ...(user.role === "ADMIN"
       ? [
@@ -59,6 +60,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         <header className="sticky top-0 z-10 flex h-14 items-center justify-between gap-4 border-b border-slate-200 bg-white/80 px-4 backdrop-blur sm:px-8">
           <p className="text-sm font-semibold text-slate-900 lg:hidden">{brand.name}</p>
           <div className="ml-auto flex items-center gap-3">
+            <NotificationBell userId={user.id} t={t.notifications} locale={locale} />
             <LanguageSwitch locale={locale} label={t.common.language} />
             <form action={logout} className="lg:hidden">
               <button type="submit" className="text-sm text-slate-600">{t.nav.logout}</button>

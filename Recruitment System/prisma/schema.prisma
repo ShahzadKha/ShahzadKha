@@ -67,6 +67,17 @@ enum EnrollmentStatus {
   STOPPED // replied, unsubscribed, won/lost, or stopped by a person
 }
 
+enum SequenceKind {
+  NURTURE // one per follow-up track, before the sale
+  ONBOARDING // after payment: welcome, coaching, testimonial (steps 24–26)
+}
+
+enum TaskStatus {
+  OPEN
+  DONE
+  CANCELLED
+}
+
 enum EventType {
   CREATED
   UPDATED
@@ -86,7 +97,9 @@ enum EventType {
   SEQUENCE_ENDED
   SDR_ASSIGNED
   CALL_LOGGED
+  PAYMENT_LINK_SENT
   PAYMENT_CONFIRMED
+  FEEDBACK_RECEIVED
   NOTE
 }
 
@@ -101,6 +114,8 @@ model User {
 
   assignedCandidates Candidate[]      @relation("AssignedSdr")
   events             CandidateEvent[]
+  tasks              CallTask[]
+  notifications      Notification[]
 }
 
 // Products the company sells (trainings, certifications…)
@@ -110,10 +125,12 @@ model Product {
   description String?
   price       Int // in euros
   keywords    String[] // skills / job titles that signal a good fit, used by the AI
+  checkoutUrl String? // ThriveCart checkout link; empty = demo checkout page
   active      Boolean  @default(true)
   createdAt   DateTime @default(now())
 
   candidates Candidate[]
+  payments   Payment[]
 }
 
 model Candidate {
@@ -176,6 +193,9 @@ model Candidate {
   events     CandidateEvent[]
   enrollment Enrollment?
   emails     EmailMessage[]
+  tasks      CallTask[]
+  payments   Payment[]
+  feedback   Feedback?
 
   @@index([status])
   @@index([globalScore])
@@ -184,13 +204,14 @@ model Candidate {
 
 // One email sequence per follow-up track (diagram steps 10–17)
 model EmailSequence {
-  id          String       @id @default(cuid())
-  track       RoutingTrack @unique
+  id          String        @id @default(cuid())
+  kind        SequenceKind  @default(NURTURE)
+  track       RoutingTrack? @unique // set for NURTURE sequences, empty for ONBOARDING
   name        String
-  active      Boolean      @default(true)
+  active      Boolean       @default(true)
   steps       EmailStep[]
   enrollments Enrollment[]
-  updatedAt   DateTime     @updatedAt
+  updatedAt   DateTime      @updatedAt
 }
 
 model EmailStep {
@@ -244,6 +265,66 @@ model EmailMessage {
   error       String?
 
   @@index([candidateId, sentAt])
+}
+
+// Step 19–21: a call an SDR has to make
+model CallTask {
+  id          String     @id @default(cuid())
+  candidateId String
+  candidate   Candidate  @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  sdrId       String
+  sdr         User       @relation(fields: [sdrId], references: [id])
+  kind        String     @default("closing") // "closing" or "callback"
+  status      TaskStatus @default(OPEN)
+  dueAt       DateTime
+  createdAt   DateTime   @default(now())
+  completedAt DateTime?
+  outcome     String? // payment_link, callback, nurture, lost
+  notes       String?
+
+  @@index([sdrId, status, dueAt])
+}
+
+// Step 23: payment confirmed (ThriveCart webhook or demo checkout)
+model Payment {
+  id          String    @id @default(cuid())
+  candidateId String
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  productId   String?
+  product     Product?  @relation(fields: [productId], references: [id])
+  amount      Int // euros
+  currency    String    @default("EUR")
+  provider    String // "thrivecart" or "simulated"
+  externalId  String?   @unique // ThriveCart order id
+  paidAt      DateTime  @default(now())
+  raw         Json?
+}
+
+// Step 26: NPS, testimonial and referral
+model Feedback {
+  id             String    @id @default(cuid())
+  candidateId    String    @unique
+  candidate      Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  nps            Int // 0–10
+  comment        String?
+  publishConsent Boolean   @default(false)
+  referralName   String?
+  referralEmail  String?
+  createdAt      DateTime  @default(now())
+}
+
+// In-app notifications (bell in the header)
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  body      String?
+  link      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt])
 }
 
 // Original CV file, stored in the database so the app runs anywhere (Vercel included)
