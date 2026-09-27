@@ -1,13 +1,15 @@
 import Link from "next/link";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, Upload } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { getDictionary } from "@/lib/i18n";
-import { SCORE_BANDS, SCORE_BAND_RANGE, STATUS_ORDER, type ScoreBand } from "@/lib/pipeline";
+import { STATUS_ORDER } from "@/lib/pipeline";
+import { TRACKS, trackRangeLabel } from "@/lib/rules";
+import { getScoringRules } from "@/lib/settings";
 import { formatDate, initials } from "@/lib/format";
 import { Avatar, PageHeader, ScorePill, StatusBadge, buttonClass, inputClass, selectClass } from "@/components/ui";
 import type { Prisma } from "@/generated/prisma/client";
-import { CandidateSource, CandidateStatus } from "@/generated/prisma/enums";
+import { CandidateSource, CandidateStatus, RoutingTrack } from "@/generated/prisma/enums";
 
 const PAGE_SIZE = 15;
 const SOURCES = Object.values(CandidateSource);
@@ -15,13 +17,14 @@ const SOURCES = Object.values(CandidateSource);
 export default async function CandidatesPage({ searchParams }: PageProps<"/candidates">) {
   await requireUser();
   const { t, locale } = await getDictionary();
+  const rules = await getScoringRules();
   const params = await searchParams;
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
 
   const q = one(params.q).trim();
   const status = one(params.status) as CandidateStatus | "";
   const source = one(params.source) as CandidateSource | "";
-  const band = one(params.band) as ScoreBand | "none" | "";
+  const track = one(params.track) as RoutingTrack | "none" | "";
   const page = Math.max(1, Number(one(params.page)) || 1);
 
   const where: Prisma.CandidateWhereInput = {};
@@ -35,11 +38,8 @@ export default async function CandidatesPage({ searchParams }: PageProps<"/candi
   }
   if (status && status in CandidateStatus) where.status = status;
   if (source && SOURCES.includes(source)) where.source = source;
-  if (band === "none") where.globalScore = null;
-  else if (band && SCORE_BANDS.includes(band)) {
-    const [min, max] = SCORE_BAND_RANGE[band];
-    where.globalScore = { gte: min, lte: max };
-  }
+  if (track === "none") where.globalScore = null;
+  else if (track && TRACKS.includes(track)) where.routingTrack = track;
 
   const [total, candidates] = await Promise.all([
     db.candidate.count({ where }),
@@ -61,7 +61,7 @@ export default async function CandidatesPage({ searchParams }: PageProps<"/candi
     if (q) sp.set("q", q);
     if (status) sp.set("status", status);
     if (source) sp.set("source", source);
-    if (band) sp.set("band", band);
+    if (track) sp.set("track", track);
     sp.set("page", String(p));
     return `/candidates?${sp}`;
   };
@@ -72,9 +72,14 @@ export default async function CandidatesPage({ searchParams }: PageProps<"/candi
         title={t.candidates.title}
         subtitle={t.candidates.subtitle}
         actions={
-          <Link href="/candidates/new" className={buttonClass.primary}>
-            <Plus className="size-4" /> {t.candidates.add}
-          </Link>
+          <>
+            <Link href="/candidates/new" className={buttonClass.secondary}>
+              <Plus className="size-4" /> {t.candidates.add}
+            </Link>
+            <Link href="/candidates/upload" className={buttonClass.primary}>
+              <Upload className="size-4" /> {t.candidates.import}
+            </Link>
+          </>
         }
       />
 
@@ -95,15 +100,15 @@ export default async function CandidatesPage({ searchParams }: PageProps<"/candi
             <option key={s} value={s}>{t.sources[s]}</option>
           ))}
         </select>
-        <select name="band" defaultValue={band} className={selectClass} aria-label={t.candidates.cols.score}>
-          <option value="">{t.candidates.allScores}</option>
-          {SCORE_BANDS.map((b) => (
-            <option key={b} value={b}>{t.scoreBands[b]}</option>
+        <select name="track" defaultValue={track} className={selectClass} aria-label={t.profile.track}>
+          <option value="">{t.candidates.allTracks}</option>
+          {TRACKS.map((tr) => (
+            <option key={tr} value={tr}>{trackRangeLabel(tr, rules)} · {t.tracks[tr]}</option>
           ))}
-          <option value="none">{t.scoreBands.none}</option>
+          <option value="none">{t.candidates.notAnalyzed}</option>
         </select>
         <button type="submit" className={buttonClass.secondary}>{t.candidates.filter}</button>
-        {(q || status || source || band) && (
+        {(q || status || source || track) && (
           <Link href="/candidates" className="px-2 text-sm text-slate-500 hover:text-slate-800">{t.candidates.reset}</Link>
         )}
       </form>

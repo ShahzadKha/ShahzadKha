@@ -22,7 +22,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
     ...(user.role === "ADMIN"
       ? [
           { href: "/users", label: t.nav.users },
-          { href: "/settings", label: t.nav.settings, soon: true },
+          { href: "/settings", label: t.nav.settings },
         ]
       : []),
   ];

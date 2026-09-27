@@ -1,24 +1,30 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, CheckCircle2, Circle, FileText, Link2, Mail, MapPin, Phone } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Bot, CheckCircle2, Circle, ExternalLink, FileText, Link2, Loader2, Mail, MapPin, Phone, RefreshCw, ShieldCheck } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
+import { getScoringRules } from "@/lib/settings";
+import { purchaseReadyConditions, trackRangeLabel } from "@/lib/rules";
+import { reanalyzeCandidate } from "@/app/actions/intake";
+import { AutoRefresh } from "@/components/auto-refresh";
+import { SubmitButton } from "@/components/submit-button";
 import { getDictionary } from "@/lib/i18n";
-import { purchaseReadyConditions, scoreBand } from "@/lib/pipeline";
-import { formatDate, formatMoney, initials } from "@/lib/format";
+import { formatDate, formatDateTime, formatMoney, initials } from "@/lib/format";
 import { addNote } from "@/app/actions/candidates";
 import { Avatar, Card, ScorePill, StatusBadge, buttonClass, inputClass } from "@/components/ui";
 import { Timeline } from "@/components/timeline";
 
 export default async function CandidatePage({ params }: PageProps<"/candidates/[id]">) {
-  await requireUser();
+  const user = await requireUser();
   const { id } = await params;
+  const rules = await getScoringRules();
   const { t, locale } = await getDictionary();
 
   const c = await db.candidate.findUnique({
     where: { id },
     include: {
       recommendedProduct: true,
+      cvFile: { select: { id: true } },
       assignedSdr: { select: { name: true } },
       events: { orderBy: { createdAt: "desc" }, include: { actor: { select: { name: true } } } },
     },
@@ -26,13 +32,15 @@ export default async function CandidatePage({ params }: PageProps<"/candidates/[
   if (!c) notFound();
 
   const analyzed = c.globalScore != null;
-  const conditions = purchaseReadyConditions(c);
-  const band = scoreBand(c.globalScore);
+  const pending = c.analysisState === "PENDING";
+  const failed = c.analysisState === "FAILED";
+  const canAnalyze = user.role !== "SDR" && Boolean(c.cvText);
+  const conditions = purchaseReadyConditions(c, rules);
   const conditionRows = [
-    { ok: conditions.fit, label: t.profile.condFit },
+    { ok: conditions.fit, label: t.profile.condFit.replace("{n}", String(rules.purchaseReady.minFit)) },
     { ok: conditions.interest, label: t.profile.condInterest },
     { ok: conditions.price, label: t.profile.condPrice },
-    { ok: conditions.timing, label: t.profile.condTiming, extra: c.timingDays != null ? `${c.timingDays} ${t.profile.daysShort}` : null },
+    { ok: conditions.timing, label: t.profile.condTiming.replace("{n}", String(rules.purchaseReady.maxTimingDays)), extra: c.timingDays != null ? `${c.timingDays} ${t.profile.daysShort}` : null },
   ];
 
   return (
@@ -56,9 +64,46 @@ export default async function CandidatePage({ params }: PageProps<"/candidates/[
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
-          <Card title={t.profile.ai}>
+          <Card
+            title={t.profile.ai}
+            action={
+              analyzed && !pending && canAnalyze ? (
+                <form action={reanalyzeCandidate.bind(null, c.id)}>
+                  <SubmitButton className="inline-flex items-center gap-1.5 text-xs font-medium text-indigo-600 hover:text-indigo-500 disabled:opacity-60">
+                    <RefreshCw className="size-3.5" /> {t.profile.reanalyze}
+                  </SubmitButton>
+                </form>
+              ) : undefined
+            }
+          >
+            {pending && (
+              <div className="mb-4 flex items-center gap-2 rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-800">
+                <Loader2 className="size-4 animate-spin" /> {t.profile.analysisPending}
+                <AutoRefresh />
+              </div>
+            )}
+            {failed && (
+              <div className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">
+                <p className="flex items-center gap-2 font-medium"><AlertTriangle className="size-4" /> {t.profile.analysisFailed}</p>
+                {c.analysisError && <p className="mt-1 text-xs text-red-700">{c.analysisError}</p>}
+                {canAnalyze && (
+                  <form action={reanalyzeCandidate.bind(null, c.id)} className="mt-2">
+                    <SubmitButton className={buttonClass.secondary}><RefreshCw className="size-4" /> {t.profile.retry}</SubmitButton>
+                  </form>
+                )}
+              </div>
+            )}
             {!analyzed ? (
-              <p className="text-sm text-slate-500">{t.profile.aiPending}</p>
+              !pending && !failed && (
+                <div className="space-y-3">
+                  <p className="text-sm text-slate-500">{c.cvText ? t.profile.aiPending : t.profile.noCv}</p>
+                  {canAnalyze && (
+                    <form action={reanalyzeCandidate.bind(null, c.id)}>
+                      <SubmitButton className={buttonClass.primary}><Bot className="size-4" /> {t.profile.analyze}</SubmitButton>
+                    </form>
+                  )}
+                </div>
+              )
             ) : (
               <div className="space-y-5">
                 <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -81,7 +126,13 @@ export default async function CandidatePage({ params }: PageProps<"/candidates/[
                   <span className={`rounded-full px-2 py-0.5 font-medium ring-1 ring-inset ${c.eligible ? "bg-emerald-50 text-emerald-800 ring-emerald-200" : "bg-red-50 text-red-700 ring-red-200"}`}>
                     {c.eligible ? t.profile.eligible : t.profile.notEligible}
                   </span>
-                  {band && <span className="rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-700">{t.scoreBands[band]}</span>}
+                  {c.analysisMode && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-700">
+                      <Bot className="size-3" />
+                      {c.analysisMode === "openai" ? `${t.profile.modeOpenAI} · ${c.analysisModel}` : t.profile.modeDemo}
+                    </span>
+                  )}
+                  {c.analyzedAt && <span className="px-1 py-0.5 text-slate-400">{formatDateTime(c.analyzedAt, locale)}</span>}
                 </div>
                 <dl className="grid gap-4 text-sm sm:grid-cols-2">
                   <div>
@@ -97,6 +148,16 @@ export default async function CandidatePage({ params }: PageProps<"/candidates/[
                     <dd className="mt-1 leading-relaxed text-slate-700">{c.aiSummary ?? "—"}</dd>
                   </div>
                 </dl>
+                {c.routingTrack && (
+                  <div className="rounded-lg border border-slate-200 p-4">
+                    <p className="text-xs font-medium text-slate-500">{t.profile.track}</p>
+                    <p className="mt-0.5 font-medium text-slate-900">
+                      {t.tracks[c.routingTrack]}{" "}
+                      <span className="text-sm font-normal text-slate-500">({trackRangeLabel(c.routingTrack, rules)})</span>
+                    </p>
+                    <p className="text-xs text-slate-500">{t.trackHints[c.routingTrack]}</p>
+                  </div>
+                )}
                 {c.recommendedProduct && (
                   <div className="flex items-center justify-between gap-4 rounded-lg border border-indigo-100 bg-indigo-50/50 p-4">
                     <div>
@@ -157,11 +218,27 @@ export default async function CandidatePage({ params }: PageProps<"/candidates/[
                     : "—"}
                 </dd>
               </div>
+              {c.motivation && (
+                <div className="sm:col-span-2">
+                  <dt className="text-xs font-medium text-slate-500">{t.profile.motivation}</dt>
+                  <dd className="mt-1 whitespace-pre-line rounded-md bg-slate-50 px-3 py-2 text-slate-700">{c.motivation}</dd>
+                </div>
+              )}
               {c.cvFileName && (
                 <div className="sm:col-span-2">
                   <dt className="text-xs font-medium text-slate-500">{t.profile.cvFile}</dt>
                   <dd className="mt-1 flex items-center gap-2 text-slate-900">
                     <FileText className="size-4 text-slate-400" /> {c.cvFileName}
+                    {c.cvFile && (
+                      <a
+                        href={`/api/candidates/${c.id}/cv`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-500"
+                      >
+                        {t.profile.downloadCv} <ExternalLink className="size-3" />
+                      </a>
+                    )}
                   </dd>
                 </div>
               )}
@@ -183,6 +260,15 @@ export default async function CandidatePage({ params }: PageProps<"/candidates/[
                   <span className="truncate">{c.linkedinUrl.replace("https://www.", "")}</span>
                 </li>
               )}
+              <li className="flex items-center gap-2 text-slate-700">
+                <ShieldCheck className="size-4 text-slate-400" />
+                <span className="text-xs text-slate-500">{t.profile.consent} :</span>
+                {c.consentAt ? (
+                  <span className="text-xs">{t.profile.consentOn} {formatDate(c.consentAt, locale)}</span>
+                ) : (
+                  <span className="text-xs text-slate-400">{t.profile.consentNone}</span>
+                )}
+              </li>
               <li className="border-t border-slate-100 pt-3 text-slate-700">
                 <span className="text-xs text-slate-500">{t.profile.assignedSdr} : </span>
                 {c.assignedSdr?.name ?? <span className="text-slate-400">{t.profile.unassigned}</span>}

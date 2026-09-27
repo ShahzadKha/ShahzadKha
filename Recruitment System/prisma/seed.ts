@@ -6,6 +6,8 @@ import { fakerFR as faker } from "@faker-js/faker";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client";
 import type { CandidateSource, CandidateStatus, EventType } from "../src/generated/prisma/enums";
+import { DEFAULT_RULES, trackFromScore } from "../src/lib/rules";
+import { normalizePhone } from "../src/lib/engine/parse";
 
 const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }) });
 
@@ -17,6 +19,7 @@ const DAY = 24 * HOUR;
 const PRODUCTS = [
   {
     name: "Formation Data Analyst",
+    keywords: ["Excel", "SQL", "Power BI", "Python", "Statistiques", "Reporting", "Tableau de bord", "Data", "Comptabilité", "Contrôle de gestion"],
     description: "SQL, Python, Power BI — 12 semaines, certification incluse",
     price: 2490,
     titles: ["Assistant(e) comptable", "Contrôleur de gestion junior", "Chargé(e) de reporting", "Analyste commercial"],
@@ -24,6 +27,7 @@ const PRODUCTS = [
   },
   {
     name: "Développeur Web Full-Stack",
+    keywords: ["HTML", "CSS", "JavaScript", "React", "Git", "WordPress", "Node.js", "PHP", "Développement web", "Intégration"],
     description: "JavaScript, React, Node.js — 16 semaines, projet professionnel",
     price: 3990,
     titles: ["Technicien support", "Intégrateur web", "Webmaster", "Technicien informatique"],
@@ -31,6 +35,7 @@ const PRODUCTS = [
   },
   {
     name: "Chef de Projet Digital",
+    keywords: ["Gestion de projet", "Agile", "Scrum", "Trello", "Communication", "Budget", "Coordination", "Planning", "Jira"],
     description: "Gestion de projet agile, UX, pilotage — 10 semaines",
     price: 2990,
     titles: ["Chargé(e) de communication", "Assistant(e) de direction", "Coordinateur(rice) événementiel", "Chef de rayon"],
@@ -38,6 +43,7 @@ const PRODUCTS = [
   },
   {
     name: "Cybersécurité – Analyste SOC",
+    keywords: ["Linux", "Réseaux", "Windows Server", "Active Directory", "Firewall", "Scripting", "Sécurité", "Cisco", "VPN", "Support informatique"],
     description: "Réseaux, SIEM, réponse à incident — 14 semaines",
     price: 4490,
     titles: ["Administrateur systèmes", "Technicien réseau", "Support informatique N2", "Technicien de maintenance"],
@@ -45,6 +51,7 @@ const PRODUCTS = [
   },
   {
     name: "Marketing Digital & Growth",
+    keywords: ["Réseaux sociaux", "SEO", "Canva", "Google Ads", "Rédaction", "CRM", "Marketing", "E-commerce", "Community management", "Vente"],
     description: "SEO, Ads, CRM, automatisation — 8 semaines",
     price: 1990,
     titles: ["Vendeur(se)", "Conseiller(ère) commercial", "Community manager", "Assistant(e) marketing"],
@@ -164,6 +171,7 @@ async function main() {
     data: [
       { key: "brandName", value: "Skilltec" },
       { key: "brandTagline", value: "Conversion CV → Achat" },
+      { key: "scoringRules", value: DEFAULT_RULES },
     ],
   });
 
@@ -182,7 +190,7 @@ async function main() {
   });
 
   const products = await Promise.all(
-    PRODUCTS.map((p) => db.product.create({ data: { name: p.name, description: p.description, price: p.price } })),
+    PRODUCTS.map((p) => db.product.create({ data: { name: p.name, description: p.description, price: p.price, keywords: p.keywords } })),
   );
 
   const sources: CandidateSource[] = ["EMAIL", "WEB_FORM", "WEB_FORM", "CSV_IMPORT", "FILE_DROP", "MANUAL"];
@@ -251,13 +259,14 @@ async function main() {
             events.push({ type: "CV_PARSED", title: "CV extrait", detail: "Texte + nom, email, téléphone, poste", toStatus: step, createdAt: at });
             break;
           case "GPT_ANALYZED":
-            events.push({ type: "AI_ANALYZED", title: "Analyse IA", detail: `Score global ${globalScore}/100`, toStatus: step, createdAt: at });
+            events.push({ type: "AI_ANALYZED", title: "Analyse IA", detail: `Score global ${globalScore}/100 · mode démo`, toStatus: step, createdAt: at });
             break;
           case "NOT_ELIGIBLE":
             events.push({ type: "STATUS_CHANGED", title: "Non éligible", detail: "Aucun produit ne correspond au profil", toStatus: step, createdAt: at });
             break;
           case "PRODUCT_MATCHED":
             events.push({ type: "STATUS_CHANGED", title: "Produit associé", detail: product.name, toStatus: step, createdAt: at });
+            events.push({ type: "ROUTED", title: "Parcours", detail: trackFromScore(globalScore!, DEFAULT_RULES), createdAt: new Date(t + 1000) });
             break;
           case "EMAIL_1_SENT":
             events.push({ type: "EMAIL_SENT", title: "Email envoyé", detail: EMAIL_SEQUENCE[0], toStatus: step, createdAt: at });
@@ -339,6 +348,8 @@ async function main() {
         });
       }
 
+      const phone = faker.phone.number({ style: "national" });
+      const analyzedAt = analyzed ? new Date(createdAt.getTime() + (delays[0] ?? 0) + (delays[1] ?? 0)) : null;
       const skills = faker.helpers.arrayElements(productDef.skills, { min: 3, max: 5 });
       const currentTitle = faker.helpers.arrayElement(productDef.titles);
       const yearsExperience = faker.number.int({ min: 0, max: 15 });
@@ -351,7 +362,8 @@ async function main() {
           firstName,
           lastName,
           email,
-          phone: faker.phone.number({ style: "national" }),
+          phone,
+          phoneKey: normalizePhone(phone),
           city,
           country: "France",
           source,
@@ -382,6 +394,10 @@ async function main() {
           intentScore,
           globalScore,
           eligible: analyzed ? !notEligible : null,
+          routingTrack: analyzed && !notEligible ? trackFromScore(globalScore!, DEFAULT_RULES) : null,
+          analysisState: analyzed ? "DONE" : null,
+          analysisMode: analyzed ? "demo" : null,
+          analyzedAt,
           recommendedProductId: reached(path, "PRODUCT_MATCHED") ? product.id : null,
           interestConfirmed,
           priceViewed,

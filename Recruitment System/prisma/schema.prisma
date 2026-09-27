@@ -45,12 +45,29 @@ enum CandidateStatus {
   NURTURE
 }
 
+// Follow-up track chosen from the global score (diagram "Règles de routage")
+enum RoutingTrack {
+  EDUCATIONAL // < 50  — nurturing éducatif (pas de vente)
+  LIGHT // 50–64 — nurturing léger
+  CONVERSION // 65–79 — séquence de conversion
+  CALL_INVITE // 80–89 — invitation à échanger
+  PRIORITY_SDR // 90–100 — handoff SDR dès que les 4 conditions sont remplies
+}
+
+enum AnalysisState {
+  PENDING
+  DONE
+  FAILED
+}
+
 enum EventType {
   CREATED
   UPDATED
   DUPLICATE_MERGED
   CV_PARSED
   AI_ANALYZED
+  ANALYSIS_FAILED
+  ROUTED
   STATUS_CHANGED
   EMAIL_SENT
   EMAIL_OPENED
@@ -82,6 +99,7 @@ model Product {
   name        String
   description String?
   price       Int // in euros
+  keywords    String[] // skills / job titles that signal a good fit, used by the AI
   active      Boolean  @default(true)
   createdAt   DateTime @default(now())
 
@@ -94,6 +112,7 @@ model Candidate {
   lastName  String
   email     String          @unique
   phone     String?
+  phoneKey  String? // digits only, used to detect duplicates
   city      String?
   country   String?
   source    CandidateSource
@@ -108,16 +127,25 @@ model Candidate {
   linkedinUrl     String?
   cvFileName      String?
   cvText          String?
+  cvFile          CvFile?
+  motivation      String? // message written by the candidate (web form)
+  consentAt       DateTime? // GDPR consent given on the web form
 
   // AI analysis (step 6–8)
-  persona     String?
-  skillGap    String?
-  aiSummary   String?
-  fitScore    Int? // 0–100
-  needScore   Int? // 0–100
-  intentScore Int? // 0–100
-  globalScore Int? // 0–100
-  eligible    Boolean?
+  persona       String?
+  skillGap      String?
+  aiSummary     String?
+  fitScore      Int? // 0–100
+  needScore     Int? // 0–100
+  intentScore   Int? // 0–100
+  globalScore   Int? // 0–100
+  eligible      Boolean?
+  routingTrack  RoutingTrack?
+  analysisState AnalysisState?
+  analysisMode  String? // "openai" or "demo"
+  analysisModel String?
+  analyzedAt    DateTime?
+  analysisError String?
 
   recommendedProductId String?
   recommendedProduct   Product? @relation(fields: [recommendedProductId], references: [id])
@@ -137,20 +165,33 @@ model Candidate {
 
   @@index([status])
   @@index([globalScore])
+  @@index([phoneKey])
+}
+
+// Original CV file, stored in the database so the app runs anywhere (Vercel included)
+model CvFile {
+  id          String    @id @default(cuid())
+  candidateId String    @unique
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  fileName    String
+  mimeType    String
+  size        Int
+  data        Bytes
+  createdAt   DateTime  @default(now())
 }
 
 // Timeline entry for a candidate: everything that happens is logged here
 model CandidateEvent {
-  id          String    @id @default(cuid())
+  id          String           @id @default(cuid())
   candidateId String
-  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  candidate   Candidate        @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   type        EventType
   title       String
   detail      String?
   toStatus    CandidateStatus? // status the candidate moved to, if this event changed it
   actorId     String?
-  actor       User?     @relation(fields: [actorId], references: [id])
-  createdAt   DateTime  @default(now())
+  actor       User?            @relation(fields: [actorId], references: [id])
+  createdAt   DateTime         @default(now())
 
   @@index([candidateId, createdAt])
 }

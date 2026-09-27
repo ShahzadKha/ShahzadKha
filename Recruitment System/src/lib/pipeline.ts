@@ -53,43 +53,10 @@ export const PHASE_BADGE: Record<Phase, string> = {
   lost: "bg-slate-100 text-slate-700 ring-slate-200",
 };
 
-// Score routing bands (diagram: "Règles de routage principales")
-export const SCORE_BANDS = ["lt50", "50_64", "65_79", "80_89", "90_100"] as const;
-export type ScoreBand = (typeof SCORE_BANDS)[number];
-
-export const SCORE_BAND_RANGE: Record<ScoreBand, [number, number]> = {
-  lt50: [0, 49],
-  "50_64": [50, 64],
-  "65_79": [65, 79],
-  "80_89": [80, 89],
-  "90_100": [90, 100],
-};
-
-export function scoreBand(score: number | null | undefined): ScoreBand | null {
-  if (score == null) return null;
-  return SCORE_BANDS.find((b) => score >= SCORE_BAND_RANGE[b][0] && score <= SCORE_BAND_RANGE[b][1]) ?? null;
-}
-
 export function scoreTone(score: number | null | undefined) {
   if (score == null) return "text-slate-400";
   if (score >= 80) return "text-emerald-700";
   if (score >= 65) return "text-sky-700";
   if (score >= 50) return "text-amber-700";
   return "text-slate-500";
-}
-
-// The 4 "Purchase Ready" conditions (diagram legend)
-export function purchaseReadyConditions(c: {
-  fitScore: number | null;
-  eligible: boolean | null;
-  interestConfirmed: boolean;
-  priceViewed: boolean;
-  timingDays: number | null;
-}) {
-  return {
-    fit: (c.fitScore ?? 0) >= 70 && c.eligible === true,
-    interest: c.interestConfirmed,
-    price: c.priceViewed,
-    timing: c.timingDays != null && c.timingDays <= 30,
-  };
 }
