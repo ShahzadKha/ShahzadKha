@@ -14,8 +14,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Recruitment System",
+  title: { template: "%s · Recruitment System", default: "Recruitment System" },
   description: "CV → Purchase conversion platform",
+  robots: { index: false, follow: false },
 };
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {

@@ -15,6 +15,7 @@ import { Avatar, Card, ScorePill, StatusBadge, buttonClass, inputClass, selectCl
 import { Timeline } from "@/components/timeline";
 import { NurtureCard } from "@/components/nurture-card";
 import { ClosingCard } from "@/components/closing-card";
+import { DeleteCandidate } from "@/components/delete-candidate";
 import { changeStatus } from "@/app/actions/nurture";
 import { STATUS_ORDER } from "@/lib/pipeline";
 
@@ -291,6 +292,11 @@ export default async function CandidatePage({ params }: PageProps<"/candidates/[
                 <span className="text-xs text-slate-500">{t.profile.assignedSdr} : </span>
                 {c.assignedSdr?.name ?? <span className="text-slate-400">{t.profile.unassigned}</span>}
               </li>
+              {user.role === "ADMIN" && (
+                <li className="border-t border-slate-100 pt-3">
+                  <DeleteCandidate candidateId={c.id} label={t.profile.delete} confirmText={t.profile.deleteConfirm} />
+                </li>
+              )}
             </ul>
           </Card>
 

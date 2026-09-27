@@ -9,6 +9,8 @@ import { RoutingTrack, type CandidateStatus } from "@/generated/prisma/enums";
 import { PageHeader, buttonClass, selectClass } from "@/components/ui";
 import { Board, type BoardCard, type BoardColumn } from "./board";
 
+export const metadata = { title: "Pipeline" };
+
 const CLOSED: CandidateStatus[] = ["WON", "LOST", "NOT_ELIGIBLE"];
 const PROCESSING: CandidateStatus[] = ["NEW_CV", "CV_PARSED", "GPT_ANALYZED"];
 const PER_COLUMN = 50;

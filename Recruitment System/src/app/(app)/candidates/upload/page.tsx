@@ -4,6 +4,8 @@ import { aiStatus } from "@/lib/settings";
 import { PageHeader } from "@/components/ui";
 import { CvUploader } from "./cv-uploader";
 
+export const metadata = { title: "Importer des CV" };
+
 export default async function UploadPage() {
   await requireUser();
   const { t } = await getDictionary();

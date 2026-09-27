@@ -20,7 +20,9 @@ export function LoginForm({ labels }: { labels: Dictionary["login"] }) {
         <input id="password" name="password" type="password" autoComplete="current-password" required className={inputClass} />
       </div>
       {state?.error && (
-        <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{labels.invalid}</p>
+        <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+          {state.error === "locked" ? labels.locked : labels.invalid}
+        </p>
       )}
       <button type="submit" disabled={pending} className={`${buttonClass.primary} w-full justify-center`}>
         {labels.submit}

@@ -1,45 +1,30 @@
 import Link from "next/link";
-import { Plus, Search, Upload } from "lucide-react";
+import { Download, Plus, Search, Upload } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { getDictionary } from "@/lib/i18n";
 import { STATUS_ORDER } from "@/lib/pipeline";
+import { candidateFilters } from "@/lib/candidate-filters";
 import { TRACKS, trackRangeLabel } from "@/lib/rules";
 import { getScoringRules } from "@/lib/settings";
 import { formatDate, initials } from "@/lib/format";
 import { Avatar, PageHeader, ScorePill, StatusBadge, buttonClass, inputClass, selectClass } from "@/components/ui";
-import type { Prisma } from "@/generated/prisma/client";
-import { CandidateSource, CandidateStatus, RoutingTrack } from "@/generated/prisma/enums";
+import { CandidateSource } from "@/generated/prisma/enums";
+
+export const metadata = { title: "Candidats" };
 
 const PAGE_SIZE = 15;
 const SOURCES = Object.values(CandidateSource);
 
 export default async function CandidatesPage({ searchParams }: PageProps<"/candidates">) {
-  await requireUser();
+  const user = await requireUser();
   const { t, locale } = await getDictionary();
   const rules = await getScoringRules();
   const params = await searchParams;
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
 
-  const q = one(params.q).trim();
-  const status = one(params.status) as CandidateStatus | "";
-  const source = one(params.source) as CandidateSource | "";
-  const track = one(params.track) as RoutingTrack | "none" | "";
+  const { where, q, status, source, track } = candidateFilters(params);
   const page = Math.max(1, Number(one(params.page)) || 1);
-
-  const where: Prisma.CandidateWhereInput = {};
-  if (q) {
-    where.OR = [
-      { firstName: { contains: q, mode: "insensitive" } },
-      { lastName: { contains: q, mode: "insensitive" } },
-      { email: { contains: q, mode: "insensitive" } },
-      { currentTitle: { contains: q, mode: "insensitive" } },
-    ];
-  }
-  if (status && status in CandidateStatus) where.status = status;
-  if (source && SOURCES.includes(source)) where.source = source;
-  if (track === "none") where.globalScore = null;
-  else if (track && TRACKS.includes(track)) where.routingTrack = track;
 
   const [total, candidates] = await Promise.all([
     db.candidate.count({ where }),
@@ -56,6 +41,7 @@ export default async function CandidatesPage({ searchParams }: PageProps<"/candi
   ]);
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
+  const filterQuery = new URLSearchParams(Object.entries({ q, status, source, track }).filter(([, v]) => v)).toString();
   const pageHref = (p: number) => {
     const sp = new URLSearchParams();
     if (q) sp.set("q", q);
@@ -73,6 +59,11 @@ export default async function CandidatesPage({ searchParams }: PageProps<"/candi
         subtitle={t.candidates.subtitle}
         actions={
           <>
+            {user.role !== "SDR" && (
+              <a href={`/api/candidates/export${filterQuery ? `?${filterQuery}` : ""}`} className={buttonClass.secondary}>
+                <Download className="size-4" /> {t.candidates.export}
+              </a>
+            )}
             <Link href="/candidates/new" className={buttonClass.secondary}>
               <Plus className="size-4" /> {t.candidates.add}
             </Link>

@@ -3,6 +3,8 @@ import { getBrand } from "@/lib/settings";
 import { LanguageSwitch } from "@/components/language-switch";
 import { LoginForm } from "./login-form";
 
+export const metadata = { title: "Connexion" };
+
 export default async function LoginPage() {
   const { t, locale } = await getDictionary();
   const brand = await getBrand();

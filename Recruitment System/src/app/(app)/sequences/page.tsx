@@ -13,6 +13,8 @@ import { Card, PageHeader, inputClass } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { TimeControls } from "./time-controls";
 
+export const metadata = { title: "Séquences email" };
+
 const pct = (n: number, d: number) => (d ? `${Math.round((n / d) * 100)} %` : "—");
 
 export default async function SequencesPage() {

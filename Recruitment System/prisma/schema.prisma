@@ -360,3 +360,15 @@ model Setting {
   key   String @id
   value Json
 }
+
+// Failed / successful logins, used to block password guessing
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  email     String
+  ip        String?
+  success   Boolean
+  createdAt DateTime @default(now())
+
+  @@index([email, createdAt])
+  @@index([ip, createdAt])
+}

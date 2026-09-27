@@ -302,6 +302,7 @@ const rand = (min: number, max: number) => faker.number.float({ min, max });
 
 async function main() {
   console.log("Resetting demo data…");
+  await db.loginAttempt.deleteMany();
   await db.notification.deleteMany();
   await db.feedback.deleteMany();
   await db.payment.deleteMany();

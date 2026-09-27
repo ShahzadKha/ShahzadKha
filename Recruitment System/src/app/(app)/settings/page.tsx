@@ -10,6 +10,8 @@ import { saveBrand, saveProduct, saveRules } from "@/app/actions/settings";
 import { ActionForm } from "@/components/action-form";
 import { Card, PageHeader, inputClass } from "@/components/ui";
 
+export const metadata = { title: "Paramètres" };
+
 function NumberField({ name, label, value, max = 100 }: { name: string; label: string; value: number; max?: number }) {
   return (
     <label className="block text-sm">

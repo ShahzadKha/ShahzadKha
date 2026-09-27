@@ -14,7 +14,9 @@ while keeping the same steps, statuses and routing rules.
 | 2 | AI engine: CV import (PDF/Word/text), public web form, intake API, deduplication, OpenAI analysis with demo mode, scoring and routing rules, Settings | ✅ Done |
 | 3 | Nurturing: email sequences per track, sending (simulated or SMTP), open/click/reply tracking, candidate offer page, unsubscribe, Purchase Ready detection, pipeline board | ✅ Done |
 | 4 | Closing: automatic SDR handoff, SDR workspace and call sheet with script, payment link (ThriveCart or demo checkout), ThriveCart webhook, onboarding emails, NPS/testimonial page, notifications | ✅ Done |
-| 5 | Dashboard and polish: funnel charts, KPIs, final polish, demo script | ⏳ Next |
+| 5 | Dashboard (funnel, KPIs, sources, SDRs, revenue, NPS), user management, password change, CSV export, GDPR deletion, login protection, mobile menu, Vercel deployment, demo script | ✅ Done |
+
+**Presenting to the client?** Follow [DEMO_SCRIPT.md](DEMO_SCRIPT.md), a 15-minute walkthrough of the whole journey.
 
 ## Tech stack
 
@@ -60,6 +62,40 @@ The password for every demo account is `demo1234`.
 
 `npm run db:seed` resets the demo data at any time. The demo candidates come with realistic email
 histories (sent, opened, clicked, replied) and sequences in progress.
+
+## Put it online (Vercel + Neon, free tiers)
+
+1. **Database**: create a free project on [neon.tech](https://neon.tech) and copy its connection string
+   (it looks like `postgresql://user:password@ep-…neon.tech/neondb?sslmode=require`).
+2. **App**: on [vercel.com](https://vercel.com), choose *Add New → Project* and import the GitHub repository.
+   - **Root Directory**: `Recruitment System`
+   - **Build Command**: `npm run vercel-build` (it applies the database migrations, then builds)
+   - **Environment variables**:
+
+   | Variable | Value |
+   |----------|-------|
+   | `DATABASE_URL` | the Neon connection string |
+   | `AUTH_SECRET` | a long random text (32+ characters) |
+   | `APP_URL` | the Vercel address, e.g. `https://recruitment-demo.vercel.app` |
+   | `CRON_SECRET` | a random text (protects the daily email job) |
+   | `INTAKE_API_KEY` | optional, turns on the import API |
+   | `OPENAI_API_KEY`, `OPENAI_MODEL` | optional, real AI analysis |
+   | `SMTP_URL`, `EMAIL_FROM` | optional, real email sending |
+   | `THRIVECART_SECRET` | optional, ThriveCart payments |
+
+3. **Demo data**: from your computer, load the demo candidates into the online database once.
+   This **deletes everything** in that database first, so never run it on real data:
+
+   ```bash
+   # Windows (Command Prompt)
+   set DATABASE_URL=postgresql://…neon.tech/neondb?sslmode=require
+   npm run db:seed
+   ```
+
+4. **Before real use**: change the demo passwords (Utilisateurs page), or create real users and
+   deactivate the demo accounts.
+
+`vercel.json` schedules the email job every morning (the free Vercel plan allows one run a day).
 
 ## AI analysis: demo mode or OpenAI
 
@@ -200,6 +236,30 @@ won, lost and not-eligible candidates. The status can also be changed from the c
 - the score weights, the minimum fit for eligibility, the thresholds of the 5 follow-up tracks and the "Purchase Ready" conditions
 - the training catalogue: name, price, description, and the keywords that tell the AI which profiles fit
 
+## Dashboard and administration
+
+- **Tableau de bord**: new candidates, eligibility rate, average AI score, purchase-ready, sales,
+  revenue, conversion, NPS; the **conversion funnel** (CV received → won, with the % kept at each
+  step); email open/click/reply rates; new CVs per week; revenue per training; performance per
+  source and per SDR. Period: 7, 30, 90 days or everything.
+- **Utilisateurs** (admin): add users with a temporary password, change roles, reset passwords,
+  deactivate accounts (their open calls are released). The last active admin cannot be removed.
+- **Mon compte**: anyone can change their own password (click your name in the sidebar).
+- **Export (CSV)** on the candidate list, with the current filters (opens in Excel).
+- **GDPR deletion**: admins can delete a candidate with their CV, emails, calls, payments and history.
+
+## Security
+
+- Passwords are hashed (bcrypt). Sessions are signed cookies (`AUTH_SECRET`), HTTP-only.
+- After 5 wrong passwords for an email (or 20 from one IP) in 15 minutes, logins are blocked for 15 minutes.
+- Roles: SDRs only see their own calls and cannot open settings, sequences, users or exports.
+- Public links (offer, payment, feedback, unsubscribe) use random, unguessable tokens.
+  Unsubscribing needs a button click, so email scanners cannot trigger it.
+- Webhooks and APIs check their secret keys. The ThriveCart secret is never stored.
+- Uploaded CVs are stored with the type the app detected, and Word and text files download
+  instead of opening, so a disguised file cannot run in the browser.
+- CSV exports neutralise spreadsheet formulas. Security headers are set on every page.
+
 ## Useful commands
 
 | Command | What it does |
@@ -211,6 +271,7 @@ won, lost and not-eligible candidates. The status can also be changed from the c
 | `npm run db:setup` | Apply database migrations and load the demo data |
 | `npm run db:seed` | Reset the demo data |
 | `npx prisma studio` | Browse the database in the browser |
+| `npm run vercel-build` | What Vercel runs: migrations, then build |
 
 ## Project structure
 
@@ -236,6 +297,8 @@ src/
     actions/         Server actions (login, language, candidates, CV import, settings)
   components/        Shared UI (sidebar, badges, timeline, charts)
   lib/
+    analytics.ts     Dashboard numbers (funnel, sources, SDRs, revenue, NPS)
+    candidate-filters.ts  Candidate search and filters (list page and CSV export)
     engine/          CV processing: text extraction, contact parsing, OpenAI and demo analysis, pipeline
     nurture/         Email sequences: default templates, rendering, sending, engagement rules
     closing/         SDR handoff, call results, payment, onboarding, feedback

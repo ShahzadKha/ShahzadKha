@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { LogOut } from "lucide-react";
+import { MobileMenu } from "@/components/mobile-menu";
 import { requireUser } from "@/lib/auth";
 import { getDictionary } from "@/lib/i18n";
 import { getBrand } from "@/lib/settings";
@@ -27,6 +29,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         ]
       : []),
   ];
+  const mobileItems: NavItem[] = [...items, { href: "/account", label: t.account.title }];
   const [first = "", last = ""] = user.name.split(" ");
 
   return (
@@ -43,11 +46,13 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         </div>
         <SidebarNav items={items} soonLabel={t.nav.soon} />
         <div className="mt-auto flex items-center gap-3 border-t border-white/10 px-2 pt-4">
-          <Avatar text={initials(first, last)} className="bg-white/10 text-white" />
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-white">{user.name}</p>
-            <p className="truncate text-xs text-slate-400">{t.roles[user.role]}</p>
-          </div>
+          <Link href="/account" className="flex min-w-0 flex-1 items-center gap-3 rounded-lg hover:opacity-90" title={t.account.title}>
+            <Avatar text={initials(first, last)} className="bg-white/10 text-white" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-white">{user.name}</p>
+              <p className="truncate text-xs text-slate-400">{t.roles[user.role]}</p>
+            </div>
+          </Link>
           <form action={logout}>
             <button type="submit" title={t.nav.logout} aria-label={t.nav.logout} className="rounded-md p-1.5 text-slate-400 hover:bg-white/10 hover:text-white">
               <LogOut className="size-4" />
@@ -58,7 +63,10 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
 
       <div className="flex min-w-0 flex-1 flex-col lg:pl-64">
         <header className="sticky top-0 z-10 flex h-14 items-center justify-between gap-4 border-b border-slate-200 bg-white/80 px-4 backdrop-blur sm:px-8">
-          <p className="text-sm font-semibold text-slate-900 lg:hidden">{brand.name}</p>
+          {/* Mobile menu: the sidebar is hidden below the lg breakpoint */}
+          <MobileMenu label={brand.name}>
+            <SidebarNav items={mobileItems} soonLabel={t.nav.soon} variant="light" />
+          </MobileMenu>
           <div className="ml-auto flex items-center gap-3">
             <NotificationBell userId={user.id} t={t.notifications} locale={locale} />
             <LanguageSwitch locale={locale} label={t.common.language} />

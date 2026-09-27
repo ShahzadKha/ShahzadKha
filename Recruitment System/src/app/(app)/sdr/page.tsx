@@ -8,6 +8,8 @@ import { daysAgo, formatDateTime, formatMoney, initials } from "@/lib/format";
 import type { Prisma } from "@/generated/prisma/client";
 import { Avatar, Card, PageHeader, ScorePill, StatusBadge, buttonClass, selectClass } from "@/components/ui";
 
+export const metadata = { title: "Espace SDR" };
+
 export default async function SdrPage({ searchParams }: PageProps<"/sdr">) {
   const user = await requireUser();
   const { t, locale } = await getDictionary();

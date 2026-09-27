@@ -94,3 +94,12 @@ export async function addNote(candidateId: string, formData: FormData) {
   });
   revalidatePath(`/candidates/${candidateId}`);
 }
+
+// GDPR right to erasure: removes the candidate with their CV, emails, calls, payments and history
+export async function deleteCandidate(candidateId: string) {
+  await requireUser(["ADMIN"]);
+  await db.candidate.delete({ where: { id: candidateId } });
+  revalidatePath("/candidates");
+  revalidatePath("/pipeline");
+  redirect("/candidates");
+}

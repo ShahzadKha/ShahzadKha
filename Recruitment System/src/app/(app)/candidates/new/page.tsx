@@ -3,6 +3,8 @@ import { getDictionary } from "@/lib/i18n";
 import { PageHeader } from "@/components/ui";
 import { CandidateForm } from "./candidate-form";
 
+export const metadata = { title: "Ajouter un candidat" };
+
 export default async function NewCandidatePage() {
   await requireUser();
   const { t } = await getDictionary();
