@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
+import { normalizePhone } from "@/lib/engine/parse";
+import type { SettingsState } from "@/app/actions/settings";
 
 const optional = z
   .string()
@@ -102,4 +104,57 @@ export async function deleteCandidate(candidateId: string) {
   revalidatePath("/candidates");
   revalidatePath("/pipeline");
   redirect("/candidates");
+}
+
+const EditSchema = z.object({
+  firstName: z.string().trim().min(1).max(80),
+  lastName: z.string().trim().max(80),
+  email: z.email().trim().toLowerCase(),
+  phone: optional,
+  city: optional,
+  currentTitle: optional,
+  linkedinUrl: optional,
+  sourceDetail: optional,
+  yearsExperience: z
+    .string()
+    .trim()
+    .transform((v) => (v ? Number(v) : null))
+    .pipe(z.number().int().min(0).max(60).nullable()),
+  timingDays: z
+    .string()
+    .trim()
+    .transform((v) => (v ? Number(v) : null))
+    .pipe(z.number().int().min(0).max(730).nullable()),
+  recommendedProductId: z.string().transform((v) => v || null),
+});
+
+const FIELD_LABELS: Record<string, string> = {
+  firstName: "prénom", lastName: "nom", email: "email", phone: "téléphone", city: "ville", currentTitle: "poste",
+  linkedinUrl: "LinkedIn", sourceDetail: "partenaire", yearsExperience: "expérience", timingDays: "démarrage souhaité",
+  recommendedProductId: "formation",
+};
+
+// Edit the candidate record (any team member), e.g. change the recommended training
+export async function updateCandidate(candidateId: string, _prev: SettingsState, formData: FormData): Promise<SettingsState> {
+  const user = await requireUser();
+  const parsed = EditSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { ok: false, at: Date.now() };
+  const data = parsed.data;
+  const current = await db.candidate.findUnique({ where: { id: candidateId } });
+  if (!current) return { ok: false, at: Date.now() };
+  if (data.email !== current.email && (await db.candidate.findUnique({ where: { email: data.email } }))) return { ok: false, at: Date.now() };
+  if (data.recommendedProductId && !(await db.product.findUnique({ where: { id: data.recommendedProductId } }))) return { ok: false, at: Date.now() };
+
+  const changed = (Object.keys(data) as (keyof typeof data)[]).filter((k) => (data[k] ?? null) !== (current[k] ?? null));
+  if (changed.length === 0) return { ok: true, at: Date.now() };
+  await db.candidate.update({
+    where: { id: candidateId },
+    data: {
+      ...data,
+      phoneKey: data.phone ? normalizePhone(data.phone) : null,
+      events: { create: { type: "UPDATED", title: "Fiche modifiée", detail: changed.map((k) => FIELD_LABELS[k]).join(", "), actorId: user.id } },
+    },
+  });
+  revalidatePath(`/candidates/${candidateId}`);
+  return { ok: true, at: Date.now() };
 }

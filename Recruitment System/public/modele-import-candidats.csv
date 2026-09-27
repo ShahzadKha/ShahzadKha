@@ -1,0 +1,3 @@
+prenom;nom;email;telephone;ville;partenaire;message;cv
+Nadia;Roux;nadia.roux@example.com;06 01 02 03 04;Paris;Indeed;Je souhaite me reconvertir rapidement;"Développeuse front-end junior, 2 ans d'expérience. Compétences : HTML, CSS, JavaScript, React, Git"
+Omar;Diallo;omar.diallo@example.com;07 11 22 33 44;Lyon;Pôle emploi;;"Chargé de reporting, 5 ans d'expérience. Compétences : Excel, SQL, Power BI, Reporting"

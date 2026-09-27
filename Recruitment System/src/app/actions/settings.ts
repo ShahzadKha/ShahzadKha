@@ -58,6 +58,11 @@ const ProductSchema = z.object({
     .trim()
     .transform((v) => v || null)
     .pipe(z.url({ protocol: /^https$/ }).nullable()),
+  platformUrl: z
+    .string()
+    .trim()
+    .transform((v) => v || null)
+    .pipe(z.url({ protocol: /^https$/ }).nullable()),
 });
 
 export async function saveProduct(_prev: SettingsState, formData: FormData): Promise<SettingsState> {
@@ -70,6 +75,7 @@ export async function saveProduct(_prev: SettingsState, formData: FormData): Pro
     keywords: formData.get("keywords") ?? "",
     active: formData.get("active") === "on",
     checkoutUrl: formData.get("checkoutUrl") ?? "",
+    platformUrl: formData.get("platformUrl") ?? "",
   });
   if (!parsed.success) return { ok: false, at: Date.now() };
   const { id, ...data } = parsed.data;

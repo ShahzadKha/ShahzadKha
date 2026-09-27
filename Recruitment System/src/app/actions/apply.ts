@@ -43,6 +43,8 @@ export async function submitApplication(_prev: ApplyState, formData: FormData): 
       contact,
       motivation,
       consent: consent === "on",
+      // ?ref=… in the form link (landing page, partner, campaign)
+      sourceDetail: String(formData.get("ref") ?? "") || null,
     });
     after(() => analyzeCandidate(result.candidateId));
     return { ok: true };

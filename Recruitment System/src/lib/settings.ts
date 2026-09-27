@@ -37,6 +37,8 @@ export const EmailSettingsSchema = z.object({
   offerBody: z.string().min(1).max(5000),
   paymentSubject: z.string().min(1).max(200),
   paymentBody: z.string().min(1).max(5000),
+  recycleAfterDays: z.number().int().min(0).max(365), // 0 = no recycling
+  maxRecycles: z.number().int().min(0).max(10),
 });
 export type EmailSettings = z.infer<typeof EmailSettingsSchema>;
 
@@ -47,6 +49,8 @@ export const DEFAULT_EMAIL_SETTINGS: EmailSettings = {
   offerBody: DEFAULT_OFFER_EMAIL.body,
   paymentSubject: DEFAULT_PAYMENT_EMAIL.subject,
   paymentBody: DEFAULT_PAYMENT_EMAIL.body,
+  recycleAfterDays: 30,
+  maxRecycles: 1,
 };
 
 // Stored settings are merged over the defaults, so fields added later never break older saves

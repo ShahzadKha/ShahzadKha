@@ -1,9 +1,10 @@
 import "server-only";
 import { db } from "@/lib/db";
-import { getClosingSettings, getEmailSettings } from "@/lib/settings";
+import { getBrand, getClosingSettings, getEmailSettings } from "@/lib/settings";
 import type { EventType } from "@/generated/prisma/enums";
 import { advanceStatus, ensureDefaultSequences, moveCandidate, sendDueSteps, sendEmail, stopEnrollment } from "@/lib/nurture/engine";
 import { STATUS_RANK } from "@/lib/nurture/status";
+import { appUrl, deliver, emailMode } from "@/lib/nurture/mailer";
 
 const HOUR = 60 * 60 * 1000;
 
@@ -15,6 +16,19 @@ async function logEvent(candidateId: string, type: EventType, title: string, det
 
 export async function notify(userId: string, title: string, body?: string | null, link?: string | null) {
   await db.notification.create({ data: { userId, title, body: body ?? null, link: link ?? null } });
+}
+
+// Step 19 "Notification au SDR assigné": also by email when real sending is set up
+async function emailTeamMember(userId: string, subject: string, text: string) {
+  if (emailMode() !== "smtp") return;
+  try {
+    const [user, brand] = await Promise.all([db.user.findUnique({ where: { id: userId }, select: { email: true } }), getBrand()]);
+    if (!user) return;
+    const html = `<p style="font-family:Arial,sans-serif;white-space:pre-line">${text.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</p>`;
+    await deliver({ to: user.email, subject, text, html, fromName: brand.name });
+  } catch (e) {
+    console.error("SDR email notification failed:", e);
+  }
 }
 
 // The active SDR with the fewest open calls (ties: alphabetical)
@@ -58,12 +72,10 @@ export async function assignSdr(candidateId: string, opts: Actor & { sdrId?: str
   });
   if (!moved) await logEvent(candidateId, "SDR_ASSIGNED", "Assigné à un SDR", sdr.name, opts.actorId);
 
-  await notify(
-    sdr.id,
-    `Nouveau candidat à appeler : ${c.firstName} ${c.lastName}`,
-    c.recommendedProduct ? `Prêt à acheter — ${c.recommendedProduct.name}` : null,
-    `/sdr/appel/${candidateId}`,
-  );
+  const title = `Nouveau candidat à appeler : ${c.firstName} ${c.lastName}`;
+  const body = c.recommendedProduct ? `Prêt à acheter — ${c.recommendedProduct.name}` : null;
+  await notify(sdr.id, title, body, `/sdr/appel/${candidateId}`);
+  await emailTeamMember(sdr.id, title, `${body ?? ""}\n\nFiche d'appel : ${appUrl()}/sdr/appel/${candidateId}\nÀ appeler sous ${settings.callSlaHours} h.`);
   return sdr;
 }
 
@@ -210,6 +222,39 @@ export async function recordFeedback(
   await logEvent(candidateId, "FEEDBACK_RECEIVED", "Avis reçu", detail);
   const c = await db.candidate.findUnique({ where: { id: candidateId }, select: { assignedSdrId: true, firstName: true, lastName: true } });
   if (c?.assignedSdrId) await notify(c.assignedSdrId, `Avis de ${c.firstName} ${c.lastName} : ${input.nps}/10`, input.comment, `/candidates/${candidateId}`);
+  if (c && input.referralEmail) await createReferral(candidateId, `${c.firstName} ${c.lastName}`, input.referralName, input.referralEmail);
+}
+
+/**
+ * Step 26 "Recommandation": the friend becomes a new lead for the team to contact.
+ * No email is sent to them automatically (they did not give consent themselves).
+ */
+async function createReferral(referrerId: string, referrerName: string, name: string | null, email: string) {
+  const existing = await db.candidate.findUnique({ where: { email }, select: { id: true } });
+  if (existing) {
+    await logEvent(existing.id, "REFERRAL_CREATED", "Recommandé à nouveau", `Par ${referrerName}`);
+    return;
+  }
+  const lead = await db.candidate.create({
+    data: {
+      firstName: name ?? "",
+      lastName: "",
+      email,
+      source: "REFERRAL",
+      sourceDetail: `Recommandé par ${referrerName}`.slice(0, 60),
+      referredById: referrerId,
+      status: "NEW_CV",
+      events: {
+        create: [
+          { type: "CREATED", title: "Candidat créé", detail: `Recommandation de ${referrerName}`, toStatus: "NEW_CV" },
+          { type: "REFERRAL_CREATED", title: "Recommandation", detail: `Recommandé(e) par ${referrerName} — à contacter pour obtenir son CV` },
+        ],
+      },
+    },
+  });
+  await logEvent(referrerId, "REFERRAL_CREATED", "Recommandation envoyée", `${name ?? ""} (${email})`.trim());
+  const team = await db.user.findMany({ where: { active: true, role: { in: ["ADMIN", "RECRUITER"] } }, select: { id: true } });
+  for (const u of team) await notify(u.id, `Nouvelle recommandation : ${name ?? email}`, `Par ${referrerName}`, `/candidates/${lead.id}`);
 }
 
 export const isClosingStage = (status: keyof typeof STATUS_RANK) =>

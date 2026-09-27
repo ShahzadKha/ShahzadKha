@@ -78,7 +78,10 @@ On Sarah's profile, **Envoyer l'email suivant maintenant** twice: the CV/LinkedI
 (day 60), then the **feedback request** (day 90). Its link opens the NPS page (0–10, testimonial
 with publishing consent, refer a friend). The dashboard NPS updates.
 
-## 7. Everything is configurable (1 min) — *Paramètres*
+## 7. Everything is configurable (1 min) — *Paramètres* and *Intégrations*
+
+- **Intégrations**: each connection (OpenAI, emails, mailbox, Acumbamail, ThriveCart, API, form)
+  with its status and a test button.
 
 - Brand name (white-label), score weights and **routing thresholds**, Purchase Ready conditions.
 - Training catalogue: price, keywords that guide the AI, **ThriveCart link**.
@@ -92,7 +95,10 @@ with publishing consent, refer a friend). The dashboard NPS updates.
 | Is the AI real? | The demo uses a rule-based "demo mode". With their OpenAI key, every CV is analysed by OpenAI (one setting). |
 | Are emails really sent? | In the demo they are simulated. With their SMTP details (Acumbamail works), they are sent for real, with open and click tracking. |
 | Does ThriveCart work? | Yes: checkout link per training + webhook. We validate it with one test order on their account. |
-| Can we connect our email inbox / job boards / Activepieces? | Yes, through the import API (`/api/intake`). |
+| Can we connect our email inbox? | Yes: CVs sent to the mailbox become candidates, and candidates' replies are read and classified automatically. |
+| Job boards / partners / Activepieces? | CSV import (with partner name) or the import API (`/api/intake`). |
+| Acumbamail? | Contacts are synced to their Acumbamail list with custom fields (status, score, training…), and Acumbamail can be the SMTP sender. |
+| Can we put the form on our landing page? | Yes: a direct link or an `<iframe>` code on the Intégrations page, with `ref=` to track each page or partner. |
 | GDPR? | Consent on the form, unsubscribe link in every email, "only email consenting candidates" option, candidate deletion. |
 | Can we change the emails and rules ourselves? | Yes, everything is in Séquences email and Paramètres, without code. |
 | Where is it hosted? | Vercel + a PostgreSQL database (Neon), or any server they prefer. |
@@ -102,6 +108,7 @@ with publishing consent, refer a friend). The dashboard NPS updates.
 1. Their training catalogue (names, prices, descriptions, ThriveCart links).
 2. An OpenAI API key.
 3. SMTP details for sending (Acumbamail or other) and the sender address.
-4. The ThriveCart webhook secret.
-5. The list of users (admins, recruiters, SDRs).
-6. A domain name, if they want one (e.g. `recrutement.skilltec.fr`).
+4. The mailbox that receives CVs and replies (IMAP access), and their Acumbamail API token and list.
+5. The ThriveCart webhook secret.
+6. The list of users (admins, recruiters, SDRs).
+7. A domain name, if they want one (e.g. `recrutement.skilltec.fr`).

@@ -10,6 +10,7 @@ export type TemplateVars = {
   lien_offre: string;
   lien_paiement: string;
   lien_avis: string;
+  lien_plateforme: string;
 };
 
 const escapeHtml = (s: string) =>
@@ -34,10 +35,11 @@ export function renderEmail(
     [vars.lien_offre, "Voir mon offre"],
     [vars.lien_paiement, "Finaliser mon inscription"],
     [vars.lien_avis, "Donner mon avis"],
+    [vars.lien_plateforme, "Accéder à la plateforme"],
   ];
   let bodyHtml = escapeHtml(fill(t.body, vars));
   for (const [url, label] of buttons) {
-    if (!url) continue;
+    if (!url || !/^https?:\/\//.test(url)) continue;
     const safe = escapeHtml(url);
     bodyHtml = bodyHtml
       .split(safe)

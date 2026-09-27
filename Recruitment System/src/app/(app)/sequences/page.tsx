@@ -81,6 +81,14 @@ export default async function SequencesPage() {
                 <input type="checkbox" name="requireConsent" defaultChecked={settings.requireConsent} className="size-4 rounded border-slate-300" />
                 {s.requireConsent}
               </label>
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <span>{s.recycle1}</span>
+                <input name="recycleAfterDays" type="number" min={0} max={365} required defaultValue={settings.recycleAfterDays} className={`${inputClass} w-20 tabular-nums`} />
+                <span>{s.recycle2}</span>
+                <input name="maxRecycles" type="number" min={0} max={10} required defaultValue={settings.maxRecycles} className={`${inputClass} w-16 tabular-nums`} />
+                <span>{s.recycle3}</span>
+              </div>
+              <p className="text-xs text-slate-500">{s.recycleHint}</p>
             </fieldset>
           </ActionForm>
         </Card>

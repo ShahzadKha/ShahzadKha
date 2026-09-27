@@ -10,6 +10,7 @@ import {
   Headset,
   Mail,
   UserCog,
+  Plug,
   Settings,
   UserCircle,
   type LucideIcon,
@@ -23,6 +24,7 @@ const ICONS: Record<string, LucideIcon> = {
   "/sequences": Mail,
   "/users": UserCog,
   "/settings": Settings,
+  "/integrations": Plug,
   "/account": UserCircle,
 };
 

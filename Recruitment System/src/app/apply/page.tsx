@@ -10,9 +10,22 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 // Public page: the "Formulaire web" source of the diagram
-export default async function ApplyPage() {
+export default async function ApplyPage({ searchParams }: PageProps<"/apply">) {
   const { t, locale } = await getDictionary();
   const brand = await getBrand();
+  const params = await searchParams;
+  const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
+  const ref = one(params.ref).slice(0, 60);
+  // ?embed=1: compact version to put inside the client's landing page (iframe)
+  const embed = one(params.embed) === "1";
+
+  if (embed) {
+    return (
+      <div className="bg-white p-4 sm:p-6">
+        <ApplyForm t={{ apply: t.apply, errors: t.intakeErrors }} ref_={ref} />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-indigo-50 to-[#f6f7f9]">
@@ -29,7 +42,7 @@ export default async function ApplyPage() {
         <h1 className="text-3xl font-semibold tracking-tight text-slate-900">{t.apply.title}</h1>
         <p className="mt-2 text-slate-600">{t.apply.subtitle}</p>
         <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-          <ApplyForm t={{ apply: t.apply, errors: t.intakeErrors }} />
+          <ApplyForm t={{ apply: t.apply, errors: t.intakeErrors }} ref_={ref} />
         </div>
       </main>
     </div>

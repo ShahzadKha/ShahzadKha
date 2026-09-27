@@ -26,11 +26,14 @@ export type IngestInput = {
   contact?: Partial<{ firstName: string; lastName: string; email: string; phone: string; city: string }>;
   motivation?: string | null;
   consent?: boolean;
+  sourceDetail?: string | null; // partner, job board or campaign
 };
 
 export type IngestResult = { candidateId: string; duplicate: boolean; name: string };
 
 const clean = (v: string | null | undefined) => (v && v.trim() ? v.trim() : null);
+// Partner / campaign names: short, letters, digits, spaces and - _ . only
+export const cleanDetail = (v: string | null | undefined) => clean(v)?.replace(/[^\p{L}\p{N} ._-]/gu, "").slice(0, 60) || null;
 
 // Statuses the analysis is allowed to move a candidate out of. Later stages keep their status.
 const EARLY_STATUSES: CandidateStatus[] = ["NEW_CV", "CV_PARSED", "GPT_ANALYZED", "PRODUCT_MATCHED", "NOT_ELIGIBLE"];
@@ -79,6 +82,7 @@ export async function ingestCv(input: IngestInput): Promise<IngestResult> {
         city: existing.city ?? clean(input.contact?.city),
         linkedinUrl: existing.linkedinUrl ?? parsed?.linkedinUrl ?? null,
         motivation: clean(input.motivation) ?? existing.motivation,
+        sourceDetail: existing.sourceDetail ?? cleanDetail(input.sourceDetail),
         consentAt: input.consent ? new Date() : existing.consentAt,
         events: {
           create: {
@@ -105,6 +109,7 @@ export async function ingestCv(input: IngestInput): Promise<IngestResult> {
       phoneKey,
       city: clean(input.contact?.city),
       source: input.source,
+      sourceDetail: cleanDetail(input.sourceDetail),
       status: cvText ? "CV_PARSED" : "NEW_CV",
       cvText,
       cvFileName: fileData?.fileName ?? null,
@@ -148,6 +153,7 @@ function sourceLabel(source: CandidateSource) {
     CSV_IMPORT: "Import CSV / API",
     FILE_DROP: "Dépôt de CV",
     MANUAL: "Ajout manuel",
+    REFERRAL: "Recommandation",
   }[source];
 }
 

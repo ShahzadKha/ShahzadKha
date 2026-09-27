@@ -4,6 +4,7 @@ import { getBrand, getEmailSettings, getScoringRules } from "@/lib/settings";
 import { purchaseReadyConditions } from "@/lib/rules";
 import type { CandidateStatus, EventType } from "@/generated/prisma/enums";
 import { appUrl, deliver } from "./mailer";
+import { syncContact } from "@/lib/integrations/acumbamail";
 import { renderEmail, type TemplateVars } from "./render";
 import { STATUS_RANK, canAdvance, shouldRecycle } from "./status";
 import { DEFAULT_ONBOARDING, DEFAULT_SEQUENCES } from "./defaults";
@@ -25,6 +26,7 @@ export async function advanceStatus(candidateId: string, to: CandidateStatus, re
   if (!c || !canAdvance(c.status, to)) return false;
   await db.candidate.update({ where: { id: candidateId }, data: { status: to } });
   await logEvent(candidateId, reason.type ?? "STATUS_CHANGED", reason.title, reason.detail, { toStatus: to, actorId: reason.actorId });
+  await syncContact(candidateId);
   return true;
 }
 
@@ -51,6 +53,8 @@ async function templateVars(candidateId: string): Promise<{ vars: TemplateVars; 
       lien_offre: "", // set per message (tracked link)
       lien_paiement: "",
       lien_avis: "",
+      // Without a platform link on the training, the email says access comes separately
+      lien_plateforme: c.recommendedProduct?.platformUrl || "(envoyés séparément sous 24 h)",
     },
   };
 }
@@ -125,7 +129,7 @@ export async function ensureDefaultSequences() {
  * Steps 10–11: put an eligible candidate into the sequence of their follow-up track
  * and send the first email right away (day 0).
  */
-export async function enrollCandidate(candidateId: string, opts: Actor & { force?: boolean } = {}) {
+export async function enrollCandidate(candidateId: string, opts: Actor & { force?: boolean; track?: RoutingTrack; title?: string } = {}) {
   const [c, settings] = await Promise.all([
     db.candidate.findUnique({ where: { id: candidateId }, include: { enrollment: true } }),
     getEmailSettings(),
@@ -140,7 +144,7 @@ export async function enrollCandidate(candidateId: string, opts: Actor & { force
   await ensureDefaultSequences();
 
   const sequence = await db.emailSequence.findUnique({
-    where: { track: c.routingTrack },
+    where: { track: opts.track ?? c.routingTrack },
     include: { steps: { orderBy: { order: "asc" }, take: 1 } },
   });
   if (!sequence?.active || sequence.steps.length === 0) return { ok: false as const, reason: "no_sequence" };
@@ -152,7 +156,7 @@ export async function enrollCandidate(candidateId: string, opts: Actor & { force
     create: { candidateId, ...data },
     update: data,
   });
-  await logEvent(candidateId, "SEQUENCE_STARTED", "Séquence démarrée", sequence.name, opts);
+  await logEvent(candidateId, "SEQUENCE_STARTED", opts.title ?? "Séquence démarrée", sequence.name, opts);
   await sendDueSteps(enrollment.id, now);
   return { ok: true as const };
 }
@@ -252,17 +256,47 @@ export async function processDueEmails(now = new Date()) {
   });
   let sent = 0;
   for (const e of due) sent += await sendDueSteps(e.id, now);
+  sent += await recycleNurtured(now);
   return sent;
 }
 
-/** Demo helper: pretend `days` have passed for every active sequence, then send what is due. */
+/**
+ * Nurturing / recyclage: candidates who finished a sequence without buying get the educational
+ * sequence again after a while (Séquences email → options). Returns how many emails were sent.
+ */
+export async function recycleNurtured(now = new Date()) {
+  const settings = await getEmailSettings();
+  if (!settings.recycleAfterDays || !settings.maxRecycles) return 0;
+  const before = new Date(now.getTime() - settings.recycleAfterDays * DAY);
+  const candidates = await db.candidate.findMany({
+    where: {
+      status: "NURTURE",
+      eligible: true,
+      unsubscribedAt: null,
+      recycleCount: { lt: settings.maxRecycles },
+      enrollment: { status: { in: ["COMPLETED", "STOPPED"] }, endedAt: { lte: before } },
+    },
+    select: { id: true },
+    take: 100,
+  });
+  let sent = 0;
+  for (const c of candidates) {
+    await db.candidate.update({ where: { id: c.id }, data: { recycleCount: { increment: 1 } } });
+    const sentBefore = await db.emailMessage.count({ where: { candidateId: c.id } });
+    await enrollCandidate(c.id, { force: true, track: "EDUCATIONAL", title: "Recyclage — nouvelle séquence" });
+    sent += (await db.emailMessage.count({ where: { candidateId: c.id } })) - sentBefore;
+  }
+  return sent;
+}
+
+/** Demo helper: pretend `days` have passed for every sequence (so recycling moves on too), then send what is due. */
 export async function simulateDays(days: number) {
-  const active = await db.enrollment.findMany({ where: { status: "ACTIVE" } });
-  const shift = days * DAY;
-  for (const e of active) {
+  const enrollments = await db.enrollment.findMany({ where: { status: { in: ["ACTIVE", "COMPLETED", "STOPPED"] } } });
+  const shift = (d: Date | null) => (d ? new Date(d.getTime() - days * DAY) : null);
+  for (const e of enrollments) {
     await db.enrollment.update({
       where: { id: e.id },
-      data: { startedAt: new Date(e.startedAt.getTime() - shift), nextSendAt: e.nextSendAt ? new Date(e.nextSendAt.getTime() - shift) : null },
+      data: { startedAt: shift(e.startedAt)!, nextSendAt: shift(e.nextSendAt), endedAt: shift(e.endedAt) },
     });
   }
   return processDueEmails();

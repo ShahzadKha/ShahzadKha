@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/auth";
 import { getDictionary } from "@/lib/i18n";
 import { STATUS_ORDER } from "@/lib/pipeline";
 import { candidateFilters } from "@/lib/candidate-filters";
+import { BulkToolbar, SelectAll } from "./bulk-toolbar";
 import { TRACKS, trackRangeLabel } from "@/lib/rules";
 import { getScoringRules } from "@/lib/settings";
 import { formatDate, initials } from "@/lib/format";
@@ -40,6 +41,7 @@ export default async function CandidatesPage({ searchParams }: PageProps<"/candi
     }),
   ]);
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const canBulk = user.role !== "SDR";
 
   const filterQuery = new URLSearchParams(Object.entries({ q, status, source, track }).filter(([, v]) => v)).toString();
   const pageHref = (p: number) => {
@@ -105,10 +107,22 @@ export default async function CandidatesPage({ searchParams }: PageProps<"/candi
       </form>
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        {canBulk && (
+          <BulkToolbar
+            t={t.bulk}
+            canDelete={user.role === "ADMIN"}
+            statuses={STATUS_ORDER.map((s) => ({ value: s, label: t.statuses[s] }))}
+          />
+        )}
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-slate-200 text-sm">
             <thead className="bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
               <tr>
+                {canBulk && (
+                  <th className="w-10 py-3 pl-4">
+                    <SelectAll label={t.bulk.selectAll} />
+                  </th>
+                )}
                 <th className="px-4 py-3">{t.candidates.cols.name}</th>
                 <th className="px-4 py-3">{t.candidates.cols.title}</th>
                 <th className="hidden px-4 py-3 2xl:table-cell">{t.candidates.cols.source}</th>
@@ -122,6 +136,11 @@ export default async function CandidatesPage({ searchParams }: PageProps<"/candi
             <tbody className="divide-y divide-slate-100">
               {candidates.map((c) => (
                 <tr key={c.id} className="hover:bg-slate-50">
+                  {canBulk && (
+                    <td className="py-3 pl-4">
+                      <input type="checkbox" name="ids" value={c.id} form="bulk" aria-label={`${c.firstName} ${c.lastName}`} className="size-4 rounded border-slate-300" />
+                    </td>
+                  )}
                   <td className="px-4 py-3">
                     <Link href={`/candidates/${c.id}`} className="flex items-center gap-3">
                       <Avatar text={initials(c.firstName, c.lastName)} />
@@ -144,7 +163,7 @@ export default async function CandidatesPage({ searchParams }: PageProps<"/candi
               ))}
               {candidates.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-sm text-slate-500">{t.candidates.empty}</td>
+                  <td colSpan={9} className="px-4 py-12 text-center text-sm text-slate-500">{t.candidates.empty}</td>
                 </tr>
               )}
             </tbody>

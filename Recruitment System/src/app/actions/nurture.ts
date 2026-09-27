@@ -160,6 +160,8 @@ export async function saveEmailSettings(_prev: SettingsState, formData: FormData
     offerBody: text("offerBody"),
     paymentSubject: text("paymentSubject"),
     paymentBody: text("paymentBody"),
+    recycleAfterDays: isOptionsForm ? Number(formData.get("recycleAfterDays")) : current.recycleAfterDays,
+    maxRecycles: isOptionsForm ? Number(formData.get("maxRecycles")) : current.maxRecycles,
   });
   if (!parsed.success) return { ok: false, at: Date.now() };
   await db.setting.upsert({

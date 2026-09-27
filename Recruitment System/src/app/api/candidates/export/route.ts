@@ -4,7 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { candidateFilters } from "@/lib/candidate-filters";
 
 const COLUMNS = [
-  "Prénom", "Nom", "Email", "Téléphone", "Ville", "Source", "Statut", "Poste actuel", "Expérience (ans)",
+  "Prénom", "Nom", "Email", "Téléphone", "Ville", "Source", "Partenaire / campagne", "Statut", "Poste actuel", "Expérience (ans)",
   "Score global", "Adéquation", "Besoin", "Intention", "Éligible", "Parcours", "Formation recommandée",
   "Prix", "SDR", "Consentement RGPD", "Désinscrit", "Créé le",
 ];
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
     COLUMNS.join(";"),
     ...rows.map((c) =>
       [
-        c.firstName, c.lastName, c.email, c.phone, c.city, c.source, c.status, c.currentTitle, c.yearsExperience,
+        c.firstName, c.lastName, c.email, c.phone, c.city, c.source, c.sourceDetail, c.status, c.currentTitle, c.yearsExperience,
         c.globalScore, c.fitScore, c.needScore, c.intentScore, c.eligible == null ? "" : c.eligible ? "oui" : "non",
         c.routingTrack, c.recommendedProduct?.name, c.recommendedProduct?.price, c.assignedSdr?.name,
         c.consentAt, c.unsubscribedAt, c.createdAt,

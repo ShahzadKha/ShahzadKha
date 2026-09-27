@@ -16,13 +16,17 @@ import { Timeline } from "@/components/timeline";
 import { NurtureCard } from "@/components/nurture-card";
 import { ClosingCard } from "@/components/closing-card";
 import { DeleteCandidate } from "@/components/delete-candidate";
+import { EditCandidate } from "@/components/edit-candidate";
 import { changeStatus } from "@/app/actions/nurture";
 import { STATUS_ORDER } from "@/lib/pipeline";
 
 export default async function CandidatePage({ params }: PageProps<"/candidates/[id]">) {
   const user = await requireUser();
   const { id } = await params;
-  const rules = await getScoringRules();
+  const [rules, products] = await Promise.all([
+    getScoringRules(),
+    db.product.findMany({ select: { id: true, name: true, active: true }, orderBy: { name: "asc" } }),
+  ]);
   const { t, locale } = await getDictionary();
 
   const c = await db.candidate.findUnique({
@@ -61,7 +65,8 @@ export default async function CandidatePage({ params }: PageProps<"/candidates/[
             {c.firstName} {c.lastName}
           </h1>
           <p className="mt-0.5 text-sm text-slate-500">
-            {c.currentTitle ?? "—"} · {t.sources[c.source]} · {t.profile.created} {formatDate(c.createdAt, locale)}
+            {c.currentTitle ?? "—"} · {t.sources[c.source]}
+            {c.sourceDetail && ` (${c.sourceDetail})`} · {t.profile.created} {formatDate(c.createdAt, locale)}
           </p>
         </div>
         <div className="flex flex-col items-end gap-2">
@@ -299,6 +304,8 @@ export default async function CandidatePage({ params }: PageProps<"/candidates/[
               )}
             </ul>
           </Card>
+
+          <EditCandidate c={c} products={products} t={t} />
 
           <Card title={t.profile.timeline}>
             <form action={addNote.bind(null, c.id)} className="mb-5 space-y-2">

@@ -8,7 +8,7 @@ import type { Dictionary } from "@/lib/i18n/fr";
 
 type Labels = { apply: Dictionary["apply"]; errors: Dictionary["intakeErrors"] };
 
-export function ApplyForm({ t }: { t: Labels }) {
+export function ApplyForm({ t, ref_ }: { t: Labels; ref_?: string }) {
   const [state, action, pending] = useActionState<ApplyState, FormData>(submitApplication, undefined);
   const [fileName, setFileName] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState<ApplyState>(undefined);
@@ -97,6 +97,7 @@ export function ApplyForm({ t }: { t: Labels }) {
         />
       </div>
 
+      {ref_ && <input type="hidden" name="ref" value={ref_} />}
       {/* Honeypot for bots — hidden from people */}
       <input type="text" name="website" tabIndex={-1} autoComplete="off" className="hidden" aria-hidden />
 

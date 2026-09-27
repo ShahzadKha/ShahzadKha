@@ -7,6 +7,7 @@ import { requireUser } from "@/lib/auth";
 import { analyzeCandidate, ingestCv, requestAnalysis } from "@/lib/engine/pipeline";
 import { intakeErrorCode, type IntakeErrorCode } from "@/lib/engine/errors";
 import { CandidateSource } from "@/generated/prisma/enums";
+import { mapHeaders, parseCsv } from "@/lib/csv";
 
 export type UploadResult =
   | { ok: true; candidateId: string; name: string; duplicate: boolean }
@@ -62,4 +63,61 @@ export async function reanalyzeCandidate(candidateId: string) {
     after(() => analyzeCandidate(candidateId, user.id));
   }
   revalidatePath(`/candidates/${candidateId}`);
+}
+
+export type CsvImportState =
+  | { ok: true; created: number; updated: number; toAnalyze: number; errors: { row: number; reason: IntakeErrorCode | "missing_email" }[] }
+  | { ok: false; error: "no_file" | "too_large" | "no_email_column" | "too_many_rows" | "empty" }
+  | undefined;
+
+const MAX_ROWS = 500;
+
+// Source 3 "Import CSV (partenaires, jobboards)": one candidate per row, deduplicated, analysed when a CV text is given
+export async function importCsv(_prev: CsvImportState, formData: FormData): Promise<CsvImportState> {
+  const user = await requireUser(["ADMIN", "RECRUITER"]);
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) return { ok: false, error: "no_file" };
+  if (file.size > 2 * 1024 * 1024) return { ok: false, error: "too_large" };
+
+  const rows = parseCsv(await file.text());
+  if (rows.length < 2) return { ok: false, error: "empty" };
+  const cols = mapHeaders(rows[0]);
+  if (cols.email === undefined) return { ok: false, error: "no_email_column" };
+  if (rows.length - 1 > MAX_ROWS) return { ok: false, error: "too_many_rows" };
+  const defaultDetail = String(formData.get("sourceDetail") ?? "").trim() || null;
+
+  const get = (r: string[], k: keyof typeof cols) => (cols[k] !== undefined ? r[cols[k]!]?.trim() || undefined : undefined);
+  let created = 0;
+  let updated = 0;
+  const toAnalyze: string[] = [];
+  const errors: { row: number; reason: IntakeErrorCode | "missing_email" }[] = [];
+
+  for (const [i, r] of rows.slice(1).entries()) {
+    const email = get(r, "email");
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      errors.push({ row: i + 2, reason: "missing_email" });
+      continue;
+    }
+    try {
+      const res = await ingestCv({
+        source: "CSV_IMPORT",
+        actorId: user.id,
+        text: get(r, "cvText"),
+        contact: { firstName: get(r, "firstName"), lastName: get(r, "lastName"), email, phone: get(r, "phone"), city: get(r, "city") },
+        motivation: get(r, "motivation"),
+        sourceDetail: get(r, "sourceDetail") ?? defaultDetail,
+      });
+      if (res.duplicate) updated++;
+      else created++;
+      if (get(r, "cvText")) toAnalyze.push(res.candidateId);
+    } catch (error) {
+      errors.push({ row: i + 2, reason: intakeErrorCode(error) });
+    }
+  }
+  // Analyse in the background, one after the other
+  after(async () => {
+    for (const id of toAnalyze) await analyzeCandidate(id);
+  });
+  revalidatePath("/candidates");
+  return { ok: true, created, updated, toAnalyze: toAnalyze.length, errors: errors.slice(0, 50) };
 }

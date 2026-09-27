@@ -1,9 +1,8 @@
 import Link from "next/link";
-import { Bot, ExternalLink, KeyRound } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { getDictionary } from "@/lib/i18n";
-import { aiStatus, getBrand, getClosingSettings, getScoringRules } from "@/lib/settings";
+import { getBrand, getClosingSettings, getScoringRules } from "@/lib/settings";
 import { SCRIPT_VARIABLES } from "@/lib/nurture/defaults";
 import { saveClosingSettings } from "@/app/actions/closing";
 import { saveBrand, saveProduct, saveRules } from "@/app/actions/settings";
@@ -31,9 +30,6 @@ export default async function SettingsPage() {
     getClosingSettings(),
     db.product.findMany({ orderBy: { createdAt: "asc" } }),
   ]);
-  const ai = aiStatus();
-  const apiEnabled = Boolean(process.env.INTAKE_API_KEY);
-  const thrivecartEnabled = Boolean(process.env.THRIVECART_SECRET);
   const cs = t.closingSettings;
   const formLabels = { save: s.save, saved: s.saved, invalid: s.invalid };
 
@@ -41,47 +37,10 @@ export default async function SettingsPage() {
     <>
       <PageHeader title={s.title} subtitle={s.subtitle} />
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card title={s.ai} hint={s.aiHint}>
-          <div className="flex items-start gap-3">
-            <span className={`flex size-9 shrink-0 items-center justify-center rounded-lg ${ai.enabled ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
-              <Bot className="size-5" />
-            </span>
-            <div className="text-sm">
-              <p className="font-medium text-slate-900">{ai.enabled ? s.aiOpenAI : s.aiDemo}</p>
-              <p className="mt-1 text-slate-600">
-                {ai.enabled ? <>{s.aiOpenAIBody} <code className="rounded bg-slate-100 px-1">{ai.model}</code>.</> : s.aiDemoBody}
-              </p>
-            </div>
-          </div>
-        </Card>
-
-        <Card title={s.intake} hint={s.intakeHint}>
-          <ul className="space-y-3 text-sm">
-            <li className="flex items-center justify-between gap-3">
-              <span className="text-slate-700">{s.webForm}</span>
-              <Link href="/apply" target="_blank" className="inline-flex items-center gap-1 font-medium text-indigo-600 hover:text-indigo-500">
-                /apply <ExternalLink className="size-3.5" />
-              </Link>
-            </li>
-            <li className="flex items-center justify-between gap-3">
-              <span className="text-slate-700">{s.api}</span>
-              <span className={`inline-flex items-center gap-1 text-xs font-medium ${apiEnabled ? "text-emerald-700" : "text-slate-500"}`}>
-                <KeyRound className="size-3.5" /> {apiEnabled ? s.apiOn : s.apiOff}
-              </span>
-            </li>
-            <li className="flex items-center justify-between gap-3">
-              <span className="text-slate-700">{cs.thrivecart} <code className="text-xs text-slate-500">/api/webhooks/thrivecart</code></span>
-              <span className={`inline-flex items-center gap-1 text-xs font-medium ${thrivecartEnabled ? "text-emerald-700" : "text-slate-500"}`}>
-                <KeyRound className="size-3.5" /> {thrivecartEnabled ? cs.thrivecartOn : cs.thrivecartOff}
-              </span>
-            </li>
-            <li>
-              <code className="block overflow-x-auto whitespace-pre rounded-lg bg-slate-900 px-3 py-2 text-xs text-slate-100">
-                {`POST /api/intake\nAuthorization: Bearer <INTAKE_API_KEY>\nmultipart/form-data: file, source, email…`}
-              </code>
-            </li>
-          </ul>
-        </Card>
+        <p className="rounded-xl border border-dashed border-slate-300 bg-white px-5 py-4 text-sm text-slate-600 lg:col-span-2">
+          {s.integrationsMoved}{" "}
+          <Link href="/integrations" className="font-medium text-indigo-600 hover:text-indigo-500">{t.nav.integrations} →</Link>
+        </p>
 
         <Card title={s.brand} hint={s.brandHint}>
           <ActionForm action={saveBrand} labels={formLabels}>
@@ -182,6 +141,10 @@ export default async function SettingsPage() {
                   <label className="block text-sm md:col-span-5">
                     <span className="mb-1 block text-xs font-medium text-slate-600">{cs.checkoutUrl}</span>
                     <input name="checkoutUrl" type="url" placeholder="https://…thrivecart.com/…" defaultValue={p?.checkoutUrl ?? ""} className={inputClass} />
+                  </label>
+                  <label className="block text-sm md:col-span-5">
+                    <span className="mb-1 block text-xs font-medium text-slate-600">{s.platformUrl}</span>
+                    <input name="platformUrl" type="url" placeholder="https://…" defaultValue={p?.platformUrl ?? ""} className={inputClass} />
                   </label>
                   <label className="flex items-end gap-2 pb-2 text-sm text-slate-700">
                     <input type="checkbox" name="active" defaultChecked={p?.active ?? true} className="size-4 rounded border-slate-300" />

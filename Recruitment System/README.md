@@ -16,6 +16,8 @@ while keeping the same steps, statuses and routing rules.
 | 4 | Closing: automatic SDR handoff, SDR workspace and call sheet with script, payment link (ThriveCart or demo checkout), ThriveCart webhook, onboarding emails, NPS/testimonial page, notifications | ✅ Done |
 | 5 | Dashboard (funnel, KPIs, sources, SDRs, revenue, NPS), user management, password change, CSV export, GDPR deletion, login protection, mobile menu, Vercel deployment, demo script | ✅ Done |
 
+| 6 | Completeness review against the diagram: inbox reading (CVs by email + candidate replies), CSV import, Acumbamail sync, recycling, referral leads, SDR email alerts, platform link, candidate editing, bulk actions, Integrations page, embeddable form with partner tracking | ✅ Done |
+
 **Presenting to the client?** Follow [DEMO_SCRIPT.md](DEMO_SCRIPT.md), a 15-minute walkthrough of the whole journey.
 
 ## Tech stack
@@ -82,6 +84,8 @@ histories (sent, opened, clicked, replied) and sequences in progress.
    | `OPENAI_API_KEY`, `OPENAI_MODEL` | optional, real AI analysis |
    | `SMTP_URL`, `EMAIL_FROM` | optional, real email sending |
    | `THRIVECART_SECRET` | optional, ThriveCart payments |
+   | `IMAP_HOST`, `IMAP_USER`, `IMAP_PASSWORD` | optional, read CVs and replies from a mailbox |
+   | `ACUMBAMAIL_AUTH_TOKEN`, `ACUMBAMAIL_LIST_ID` | optional, sync contacts to Acumbamail |
 
 3. **Demo data**: from your computer, load the demo candidates into the online database once.
    This **deletes everything** in that database first, so never run it on real data:
@@ -117,8 +121,10 @@ If an OpenAI call fails, the candidate shows "L'analyse a échoué" with the err
 
 | Source | How to use it |
 |--------|---------------|
-| Web form (landing page) | Public page at **`/apply`**, no login. Candidate fills in details, uploads a CV and gives GDPR consent |
-| CV drop / email / partner import | **Candidats → Importer des CV**: drag and drop several PDF, Word (.docx) or text files |
+| Incoming email | The **mailbox** is read automatically (IMAP): an email with a CV attached creates the candidate. If the CV has no email address, the sender's is used |
+| Web form (landing page) | Public page at **`/apply`**, no login. Candidate fills in details, uploads a CV and gives GDPR consent. `?ref=skillhubs` records where they came from; `?embed=1` gives a compact version to put in an `<iframe>` on the landing page |
+| CV drop | **Candidats → Importer des CV**: drag and drop several PDF, Word (.docx) or text files |
+| Partner / job board file | Same page, **Importer un fichier CSV**: one row per candidate (template provided), with the partner name |
 | Manual entry | **Candidats → Ajouter un candidat** |
 | Automations (email inbox, job boards, Activepieces, n8n…) | **`POST /api/intake`**, see below |
 
@@ -178,6 +184,14 @@ What the candidate does moves them through the pipeline automatically:
 | All 4 conditions met (fit, interest, price viewed, timing) | `PURCHASE_READY`, sequence stops (ready for an SDR) |
 | Sequence ends with no interest | `NURTURE` (recycled) |
 
+**Real replies**: when the mailbox is connected, candidates' replies are read and classified
+(OpenAI if configured, otherwise keywords): *interested* → offer email; *not interested* → lost;
+*STOP / unsubscribe* → unsubscribed. A reply from a candidate who is already with an SDR is logged
+and the SDR is notified, without changing their status. The quoted email below the reply is removed.
+
+**Recycling**: candidates who finish a sequence without buying (`NURTURE`) get the educational
+sequence again after 30 days, once (both editable in Séquences email → options).
+
 **For demos**, every candidate profile has "Simuler une action du candidat" buttons (opens, clicks,
 replies, unsubscribes) and "Envoyer l'email suivant maintenant". The **Séquences email** page has
 "Simuler +1 jour / +7 jours" to fast-forward time. Team members who open an offer page see a
@@ -222,6 +236,30 @@ In ThriveCart, add a webhook to `https://your-app/api/webhooks/thrivecart` and p
 link, or email), records the payment once per order, and moves them to `WON`. Amounts are read from
 `order[total]` in cents. **Check this with one real test order**, since it was built from ThriveCart's
 webhook format but not tested against a live ThriveCart account.
+
+## Integrations page (admin)
+
+**Intégrations** shows every connection with its status and a test button: OpenAI, email sending
+(SMTP), the mailbox (IMAP, with the last emails read), Acumbamail, ThriveCart (webhook address),
+the import API, the candidate form (direct link and `<iframe>` code) and the scheduler.
+
+**Acumbamail (step 10)**: with `ACUMBAMAIL_AUTH_TOKEN` and `ACUMBAMAIL_LIST_ID`, each candidate is
+added to / updated in the Acumbamail list whenever their status changes, with the custom fields
+`prenom`, `nom`, `statut`, `score`, `formation`, `parcours` (create them in the list). Built from
+Acumbamail's API documentation: check it once with the client's account.
+
+## Working with candidates
+
+- **Edit a record** (profile → *Modifier la fiche*): contact details, job title, start date,
+  partner, and the **recommended training** (e.g. the candidate prefers another course).
+- **Bulk actions** on the candidate list: tick candidates, then run the AI analysis, start the
+  email sequence, assign an SDR, change the status, or delete (admin).
+- **Referrals (step 26)**: a friend recommended on the feedback page becomes a new lead
+  (source *Recommandation*), and admins and recruiters are notified to contact them. They are not
+  emailed automatically, since they did not give consent themselves.
+- **SDR alerts (step 19)**: a new call is also emailed to the SDR when real email sending is on.
+- **Platform access (step 24)**: set the training platform link on each training (Settings →
+  catalogue); the welcome email includes it as a button.
 
 ## Pipeline board
 
@@ -290,6 +328,7 @@ src/
     api/t/           Email open and click tracking
     api/cron/        Daily scheduler that sends due emails
     api/webhooks/    ThriveCart payment webhook
+    (app)/integrations/  Integrations page (status and tests)
     paiement/        Payment link page (ThriveCart redirect or demo checkout)
     avis/            NPS, testimonial and referral page
     (app)/sdr/       SDR workspace and call sheet
@@ -301,7 +340,10 @@ src/
     candidate-filters.ts  Candidate search and filters (list page and CSV export)
     engine/          CV processing: text extraction, contact parsing, OpenAI and demo analysis, pipeline
     nurture/         Email sequences: default templates, rendering, sending, engagement rules
-    closing/         SDR handoff, call results, payment, onboarding, feedback
+    closing/         SDR handoff, call results, payment, onboarding, feedback, referrals
+    inbound/         Mailbox reading (IMAP) and reply classification
+    integrations/    Acumbamail contact sync
+    csv.ts           CSV reader for the partner import
     rules.ts         Scoring, eligibility, follow-up tracks and "Purchase Ready" rules
     pipeline.ts      Pipeline statuses and phases
     i18n/            French and English texts

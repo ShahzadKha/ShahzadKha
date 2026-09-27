@@ -149,7 +149,7 @@ export const DEFAULT_ONBOARDING: { name: string; steps: DefaultStep[] } = {
     {
       dayOffset: 0,
       subject: "Bienvenue dans la formation {{produit}} !",
-      body: "Bonjour {{prenom}},\n\nFélicitations et bienvenue ! Votre inscription à la formation {{produit}} est confirmée.\n\nProchaines étapes :\n1. Vous recevrez vos accès à la plateforme de formation sous 24 h.\n2. Bloquez 30 minutes pour découvrir le programme et le planning.\n3. Rejoignez la communauté des apprenants pour poser vos questions.\n\nNous sommes ravis de vous accompagner." + SIGNATURE,
+      body: "Bonjour {{prenom}},\n\nFélicitations et bienvenue ! Votre inscription à la formation {{produit}} est confirmée.\n\nVos accès à la plateforme de formation : {{lien_plateforme}}\n\nProchaines étapes :\n1. Connectez-vous et complétez votre profil.\n2. Bloquez 30 minutes pour découvrir le programme et le planning.\n3. Rejoignez la communauté des apprenants pour poser vos questions.\n\nNous sommes ravis de vous accompagner." + SIGNATURE,
     },
     {
       dayOffset: 60,
@@ -185,5 +185,5 @@ Rappelez le format, le calendrier et le prix ({{prix}}).
 # 5. Closing
 « Je vous envoie maintenant le lien d'inscription sécurisé, vous pourrez réserver votre place pour la prochaine session. »`;
 
-export const TEMPLATE_VARIABLES = ["prenom", "nom", "produit", "prix", "poste", "marque", "lien_offre", "lien_paiement", "lien_avis"] as const;
+export const TEMPLATE_VARIABLES = ["prenom", "nom", "produit", "prix", "poste", "marque", "lien_offre", "lien_paiement", "lien_avis", "lien_plateforme"] as const;
 export const SCRIPT_VARIABLES = ["prenom", "nom", "produit", "prix", "marque", "sdr", "delai", "ecart", "score"] as const;

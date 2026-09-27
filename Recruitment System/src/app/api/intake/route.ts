@@ -8,7 +8,7 @@ import { CandidateSource } from "@/generated/prisma/enums";
  * Intake API for automated sources: email parser (IMAP), job boards, partners, Activepieces/n8n.
  * Auth: header "Authorization: Bearer <INTAKE_API_KEY>".
  * Body: multipart/form-data with "file" (PDF/DOCX/TXT) or JSON with "cvText";
- * optional fields: source, firstName, lastName, email, phone, city, motivation.
+ * optional fields: source, sourceDetail (partner / job board), firstName, lastName, email, phone, city, motivation.
  */
 function authorized(request: NextRequest) {
   const key = process.env.INTAKE_API_KEY;
@@ -60,6 +60,7 @@ export async function POST(request: NextRequest) {
         city: str(fields.city),
       },
       motivation: str(fields.motivation),
+      sourceDetail: str(fields.sourceDetail) ?? str(fields.partner),
     });
     after(() => analyzeCandidate(result.candidateId));
     return NextResponse.json(result, { status: result.duplicate ? 200 : 201 });

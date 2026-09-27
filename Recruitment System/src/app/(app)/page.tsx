@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { getDictionary } from "@/lib/i18n";
 import { PERIODS, getDashboard, type Period } from "@/lib/analytics";
-import { formatDate, formatMoney, initials } from "@/lib/format";
+import { formatDate, formatDateTime, formatMoney, initials } from "@/lib/format";
 import { Avatar, Card, PageHeader, ScorePill, StatusBadge } from "@/components/ui";
 import { BarList, ColumnChart } from "@/components/charts";
 
@@ -18,12 +18,19 @@ export default async function DashboardPage({ searchParams }: PageProps<"/">) {
   const raw = (await searchParams).period;
   const period: Period = PERIODS.includes(raw as Period) ? (raw as Period) : "30";
 
-  const [data, recent] = await Promise.all([
+  const [data, recent, activity] = await Promise.all([
     getDashboard(period),
     db.candidate.findMany({
       orderBy: { createdAt: "desc" },
       take: 6,
       select: { id: true, firstName: true, lastName: true, currentTitle: true, status: true, globalScore: true, createdAt: true },
+    }),
+    // Key moments across all candidates
+    db.candidateEvent.findMany({
+      where: { type: { in: ["CREATED", "EMAIL_REPLIED", "PRICE_VIEWED", "SDR_ASSIGNED", "CALL_LOGGED", "PAYMENT_CONFIRMED", "FEEDBACK_RECEIVED", "REFERRAL_CREATED", "UNSUBSCRIBED"] } },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+      include: { candidate: { select: { id: true, firstName: true, lastName: true } } },
     }),
   ]);
   const k = data.kpis;
@@ -174,18 +181,18 @@ export default async function DashboardPage({ searchParams }: PageProps<"/">) {
         </Card>
       </div>
 
+      <div className="mt-6 grid gap-6 lg:grid-cols-2">
       <Card
         title={d.recent}
-        className="mt-6"
         action={
           <Link href="/candidates" className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-500">
             {d.viewAll} <ArrowRight className="size-3" />
           </Link>
         }
       >
-        <ul className="-my-2 grid divide-y divide-slate-100 md:grid-cols-2 md:gap-x-8 md:divide-y-0">
+        <ul className="-my-2 divide-y divide-slate-100">
           {recent.map((c) => (
-            <li key={c.id} className="md:border-b md:border-slate-100">
+            <li key={c.id}>
               <Link href={`/candidates/${c.id}`} className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-2.5 hover:bg-slate-50">
                 <Avatar text={initials(c.firstName, c.lastName)} />
                 <div className="min-w-0 flex-1">
@@ -199,6 +206,21 @@ export default async function DashboardPage({ searchParams }: PageProps<"/">) {
           ))}
         </ul>
       </Card>
+        <Card title={d.activity}>
+          <ul className="-my-2 divide-y divide-slate-100">
+            {activity.map((e) => (
+              <li key={e.id} className="py-2.5 text-sm">
+                <Link href={`/candidates/${e.candidate.id}`} className="font-medium text-slate-900 hover:text-indigo-600">
+                  {e.candidate.firstName} {e.candidate.lastName}
+                </Link>{" "}
+                <span className="text-slate-600">— {t.events[e.type]}</span>
+                {e.detail && <span className="block truncate text-xs text-slate-500">{e.detail}</span>}
+                <span className="block text-[11px] text-slate-400">{formatDateTime(e.createdAt, locale)}</span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      </div>
     </>
   );
 }

@@ -23,6 +23,7 @@ enum CandidateSource {
   CSV_IMPORT // Import CSV / API partenaires, jobboards
   FILE_DROP // Dépôt manuel CV (dossier surveillé)
   MANUAL // Ajout manuel par un recruteur
+  REFERRAL // Recommandé par un client (étape 26)
 }
 
 // Pipeline statuses, in funnel order (diagram legend "Statuts du pipeline")
@@ -97,6 +98,7 @@ enum EventType {
   SEQUENCE_ENDED
   SDR_ASSIGNED
   CALL_LOGGED
+  REFERRAL_CREATED
   PAYMENT_LINK_SENT
   PAYMENT_CONFIRMED
   FEEDBACK_RECEIVED
@@ -126,6 +128,7 @@ model Product {
   price       Int // in euros
   keywords    String[] // skills / job titles that signal a good fit, used by the AI
   checkoutUrl String? // ThriveCart checkout link; empty = demo checkout page
+  platformUrl String? // training platform link, sent in the welcome email
   active      Boolean  @default(true)
   createdAt   DateTime @default(now())
 
@@ -134,16 +137,17 @@ model Product {
 }
 
 model Candidate {
-  id        String          @id @default(cuid())
-  firstName String
-  lastName  String
-  email     String          @unique
-  phone     String?
-  phoneKey  String? // digits only, used to detect duplicates
-  city      String?
-  country   String?
-  source    CandidateSource
-  status    CandidateStatus @default(NEW_CV)
+  id           String          @id @default(cuid())
+  firstName    String
+  lastName     String
+  email        String          @unique
+  phone        String?
+  phoneKey     String? // digits only, used to detect duplicates
+  city         String?
+  country      String?
+  source       CandidateSource
+  sourceDetail String? // partner, job board or campaign (e.g. "skillhubs", "indeed")
+  status       CandidateStatus @default(NEW_CV)
 
   // Extracted from the CV
   currentTitle    String?
@@ -158,6 +162,8 @@ model Candidate {
   motivation      String? // message written by the candidate (web form)
   consentAt       DateTime? // GDPR consent given on the web form
   unsubscribedAt  DateTime? // clicked "unsubscribe": no more emails
+  recycleCount    Int       @default(0) // times put back into a sequence after nurturing
+  referredById    String? // the customer who recommended this person
   publicToken     String    @unique @default(uuid()) // for the candidate's offer and unsubscribe pages
 
   // AI analysis (step 6–8)
@@ -371,4 +377,19 @@ model LoginAttempt {
 
   @@index([email, createdAt])
   @@index([ip, createdAt])
+}
+
+// Emails read from the inbox (IMAP): CVs sent by email and candidate replies
+model InboundEmail {
+  id          String   @id @default(cuid())
+  messageId   String   @unique
+  fromEmail   String
+  subject     String?
+  receivedAt  DateTime
+  processedAt DateTime @default(now())
+  kind        String // "cv", "reply", "ignored", "error"
+  detail      String?
+  candidateId String?
+
+  @@index([processedAt])
 }

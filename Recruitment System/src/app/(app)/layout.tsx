@@ -25,6 +25,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
     ...(user.role === "ADMIN"
       ? [
           { href: "/users", label: t.nav.users },
+          { href: "/integrations", label: t.nav.integrations },
           { href: "/settings", label: t.nav.settings },
         ]
       : []),

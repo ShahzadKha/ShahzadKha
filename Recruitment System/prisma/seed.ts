@@ -185,6 +185,7 @@ class Sim {
       lien_offre: `${APP_URL}/api/t/c/${token}`,
       lien_paiement: `${APP_URL}/paiement/${this.publicToken}`,
       lien_avis: `${APP_URL}/avis/${this.publicToken}`,
+      lien_plateforme: `https://plateforme.example.com/${this.vars.produit.toLowerCase().normalize("NFD").replace(/[^a-z]+/g, "-")}`,
     }, {
       unsubscribe: `${APP_URL}/desinscription/${this.publicToken}`,
     });
@@ -303,6 +304,7 @@ const rand = (min: number, max: number) => faker.number.float({ min, max });
 async function main() {
   console.log("Resetting demo data…");
   await db.loginAttempt.deleteMany();
+  await db.inboundEmail.deleteMany();
   await db.notification.deleteMany();
   await db.feedback.deleteMany();
   await db.payment.deleteMany();
@@ -336,7 +338,17 @@ async function main() {
   const recruiter = await db.user.create({ data: { name: "Inès Robert", email: "recruteur@demo.local", passwordHash, role: "RECRUITER" } });
 
   const products = await Promise.all(
-    PRODUCTS.map((p) => db.product.create({ data: { name: p.name, description: p.description, price: p.price, keywords: p.keywords } })),
+    PRODUCTS.map((p) =>
+      db.product.create({
+        data: {
+          name: p.name,
+          description: p.description,
+          price: p.price,
+          keywords: p.keywords,
+          platformUrl: `https://plateforme.example.com/${p.name.toLowerCase().normalize("NFD").replace(/[^a-z]+/g, "-")}`,
+        },
+      }),
+    ),
   );
 
   // Email sequences from the defaults
@@ -378,6 +390,14 @@ async function main() {
       const email = faker.internet.email({ firstName, lastName, provider: "example.com", allowSpecialCharacters: false }).toLowerCase();
       const phone = faker.phone.number({ style: "national" });
       const source = faker.helpers.arrayElement(sources);
+      const sourceDetail =
+        source === "WEB_FORM"
+          ? faker.helpers.arrayElement(["landing-page", "skillhubs"])
+          : source === "CSV_IMPORT"
+            ? faker.helpers.arrayElement(["Indeed", "Pôle emploi", "LinkedIn"])
+            : source === "EMAIL"
+              ? "Email"
+              : null;
       const publicToken = randomUUID().replace(/-/g, "");
       const currentTitle = faker.helpers.arrayElement(productDef.titles);
       const yearsExperience = faker.number.int({ min: 0, max: 15 });
@@ -599,6 +619,7 @@ async function main() {
           city,
           country: "France",
           source,
+          sourceDetail,
           status: sim.status,
           publicToken,
           cvFileName,
@@ -704,6 +725,34 @@ async function main() {
       }
       count++;
     }
+  }
+
+  // Step 26: a happy customer recommended a friend, who is now a lead for the team
+  const referrer = await db.feedback.findFirst({ include: { candidate: true } });
+  if (referrer) {
+    const who = `${referrer.candidate.firstName} ${referrer.candidate.lastName}`;
+    const since = new Date(referrer.createdAt.getTime() + HOUR);
+    await db.feedback.update({ where: { id: referrer.id }, data: { referralName: "Malik", referralEmail: "malik.ami@example.com" } });
+    await db.candidateEvent.create({ data: { candidateId: referrer.candidateId, type: "REFERRAL_CREATED", title: "Recommandation envoyée", detail: "Malik (malik.ami@example.com)", createdAt: since } });
+    await db.candidate.create({
+      data: {
+        firstName: "Malik",
+        lastName: "",
+        email: "malik.ami@example.com",
+        source: "REFERRAL",
+        sourceDetail: `Recommandé par ${who}`.slice(0, 60),
+        referredById: referrer.candidateId,
+        status: "NEW_CV",
+        createdAt: since,
+        events: {
+          create: [
+            { type: "CREATED", title: "Candidat créé", detail: `Recommandation de ${who}`, toStatus: "NEW_CV", createdAt: since },
+            { type: "REFERRAL_CREATED", title: "Recommandation", detail: `Recommandé(e) par ${who} — à contacter pour obtenir son CV`, createdAt: since },
+          ],
+        },
+      },
+    });
+    count++;
   }
 
   const byStatus = await db.candidate.groupBy({ by: ["status"], _count: { _all: true } });

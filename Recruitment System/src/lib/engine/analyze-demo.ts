@@ -18,6 +18,7 @@ const SOURCE_INTENT: Record<AnalysisInput["source"], number> = {
   MANUAL: 45,
   FILE_DROP: 40,
   CSV_IMPORT: 35,
+  REFERRAL: 55,
 };
 
 function lines(text: string) {

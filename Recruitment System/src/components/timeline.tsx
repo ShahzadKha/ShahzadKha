@@ -1,6 +1,7 @@
 import clsx from "clsx";
 import {
   AlertTriangle,
+  Gift,
   Link2,
   Star,
   BellOff,
@@ -49,6 +50,7 @@ const ICON: Record<EventType, LucideIcon> = {
   SEQUENCE_ENDED: StopCircle,
   SDR_ASSIGNED: UserCheck,
   CALL_LOGGED: Phone,
+  REFERRAL_CREATED: Gift,
   PAYMENT_LINK_SENT: Link2,
   PAYMENT_CONFIRMED: CreditCard,
   FEEDBACK_RECEIVED: Star,
