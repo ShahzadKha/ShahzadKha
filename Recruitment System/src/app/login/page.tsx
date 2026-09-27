@@ -25,6 +25,8 @@ export default async function LoginPage() {
         <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
           <LoginForm labels={t.login} />
         </div>
+        {/* Demo accounts are only shown when SHOW_DEMO_LOGINS=true (never on a public site with real data) */}
+        {process.env.SHOW_DEMO_LOGINS === "true" && (
         <div className="mt-6 rounded-lg border border-dashed border-slate-300 bg-white/60 p-4 text-xs text-slate-600">
           <p className="font-medium text-slate-700">{t.login.demoHint}</p>
           <ul className="mt-2 space-y-1 font-mono">
@@ -33,6 +35,7 @@ export default async function LoginPage() {
             <li>recruteur@demo.local — {t.roles.RECRUITER}</li>
           </ul>
         </div>
+        )}
       </div>
     </div>
   );

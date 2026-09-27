@@ -67,8 +67,9 @@ histories (sent, opened, clicked, replied) and sequences in progress.
 
 ## Put it online (Vercel + Neon, free tiers)
 
-1. **Database**: create a free project on [neon.tech](https://neon.tech) and copy its connection string
-   (it looks like `postgresql://user:password@ep-…neon.tech/neondb?sslmode=require`).
+1. **Database**: create a free project on [neon.tech](https://neon.tech). In *Connect*, copy two
+   connection strings: the **pooled** one (host contains `-pooler`) and the **direct** one
+   (toggle "Connection pooling" off). Both look like `postgresql://user:password@ep-…neon.tech/neondb?sslmode=require`.
 2. **App**: on [vercel.com](https://vercel.com), choose *Add New → Project* and import the GitHub repository.
    - **Root Directory**: `Recruitment System`
    - **Build Command**: `npm run vercel-build` (it applies the database migrations, then builds)
@@ -76,10 +77,12 @@ histories (sent, opened, clicked, replied) and sequences in progress.
 
    | Variable | Value |
    |----------|-------|
-   | `DATABASE_URL` | the Neon connection string |
+   | `DATABASE_URL` | the Neon **pooled** connection string (used by the app) |
+   | `DIRECT_URL` | the Neon **direct** connection string (used for migrations) |
    | `AUTH_SECRET` | a long random text (32+ characters) |
    | `APP_URL` | the Vercel address, e.g. `https://recruitment-demo.vercel.app` |
    | `CRON_SECRET` | a random text (protects the daily email job) |
+   | `SHOW_DEMO_LOGINS` | `true` only while showing demo data; leave it off once real data is in |
    | `INTAKE_API_KEY` | optional, turns on the import API |
    | `OPENAI_API_KEY`, `OPENAI_MODEL` | optional, real AI analysis |
    | `SMTP_URL`, `EMAIL_FROM` | optional, real email sending |
@@ -91,13 +94,14 @@ histories (sent, opened, clicked, replied) and sequences in progress.
    This **deletes everything** in that database first, so never run it on real data:
 
    ```bash
-   # Windows (Command Prompt)
+   # Windows (Command Prompt) — use the DIRECT connection string here
    set DATABASE_URL=postgresql://…neon.tech/neondb?sslmode=require
    npm run db:seed
    ```
 
-4. **Before real use**: change the demo passwords (Utilisateurs page), or create real users and
-   deactivate the demo accounts.
+4. **Before real use**: remove `SHOW_DEMO_LOGINS`, change the demo passwords (Utilisateurs page)
+   or create real users and deactivate the demo accounts, and reset the database to an empty one
+   (or delete the demo candidates) before real candidates arrive.
 
 `vercel.json` schedules the email job every morning (the free Vercel plan allows one run a day).
 
