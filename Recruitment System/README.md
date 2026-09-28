@@ -115,7 +115,9 @@ histories (sent, opened, clicked, replied) and sequences in progress.
    or create real users and deactivate the demo accounts, and reset the database to an empty one
    (or delete the demo candidates) before real candidates arrive.
 
-`vercel.json` schedules the email job every morning (the free Vercel plan allows one run a day).
+`vercel.json` schedules the email job every morning (the free Vercel plan allows one run a day)
+and runs the app in Frankfurt (`fra1`), next to a Neon database in the EU. If your Neon project
+is in another region, change `regions` in `vercel.json` to the closest Vercel region.
 
 ## AI analysis: demo mode or OpenAI
 
