@@ -38,7 +38,7 @@ The easiest way to get PostgreSQL is **Docker Desktop**.
 
 ```bash
 # 1. Go into the project folder
-cd "Recruitment System"
+cd recruitment-system
 
 # 2. Start PostgreSQL (needs Docker Desktop running)
 docker compose up -d
@@ -75,7 +75,7 @@ histories (sent, opened, clicked, replied) and sequences in progress.
    connection strings: the **pooled** one (host contains `-pooler`) and the **direct** one
    (toggle "Connection pooling" off). Both look like `postgresql://user:password@ep-…neon.tech/neondb?sslmode=require`.
 2. **App**: on [vercel.com](https://vercel.com), choose *Add New → Project* and import the GitHub repository.
-   - **Root Directory**: `Recruitment System`
+   - **Root Directory**: `recruitment-system` (the folder name must not contain spaces, Vercel rejects it)
    - **Build Command**: `npm run vercel-build` (it applies the database migrations, then builds)
    - **Environment variables**:
 
@@ -98,8 +98,8 @@ histories (sent, opened, clicked, replied) and sequences in progress.
 
    > **Free (Hobby) plan**: Vercel only deploys commits whose author is the owner of the Vercel
    > account. Commits must be signed with the email of your GitHub account
-   > (`git config user.email you@example.com`), otherwise the deployment fails at
-   > "Deploying outputs…" after a successful build.
+   > (`git config user.email you@example.com`), otherwise Vercel blocks the
+   > deployment.
 
 3. **Demo data**: the easiest way is `SEED_DEMO_DATA=true` above, which loads it during the first
    deployment. Or, from your computer, load the demo candidates into the online database once.
