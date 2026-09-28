@@ -13,6 +13,9 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+// Pages and their server actions may run up to 60 s (CV import + AI analysis run after the response)
+export const maxDuration = 60;
+
 export const metadata: Metadata = {
   title: { template: "%s · Recruitment System", default: "Recruitment System" },
   description: "CV → Purchase conversion platform",

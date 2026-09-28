@@ -3,7 +3,8 @@ import { processDueEmails } from "@/lib/nurture/engine";
 import { imapConfigured, pollInbox } from "@/lib/inbound/imap";
 import { applyRetention } from "@/lib/gdpr/retention";
 
-export const maxDuration = 300;
+// 60 s is allowed on every Vercel plan; anything left over is done on the next run
+export const maxDuration = 60;
 
 // Called by the scheduler (Vercel Cron, see vercel.json, or any external cron service):
 // reads the inbox (new CVs and replies), sends the emails that are due, applies GDPR retention.

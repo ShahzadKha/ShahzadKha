@@ -38,8 +38,8 @@ export async function applyRetention() {
   if (!settings.enabled) return 0;
   let deleted = 0;
   const started = Date.now();
-  // Stops after ~3 minutes to stay within the scheduler's time limit; the rest goes the next day
-  for (let i = 0; i < 20 && Date.now() - started < 180_000; i++) {
+  // Stops after ~30 seconds to stay within the scheduler's time limit; the rest goes the next day
+  for (let i = 0; i < 20 && Date.now() - started < 30_000; i++) {
     const batch = await db.candidate.findMany({ where: inactiveWhere(settings.months), select: { id: true }, take: 200 });
     if (batch.length === 0) break;
     deleted += await eraseCandidates(batch.map((c) => c.id));
