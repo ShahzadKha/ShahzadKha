@@ -96,6 +96,11 @@ histories (sent, opened, clicked, replied) and sequences in progress.
    | `IMAP_HOST`, `IMAP_USER`, `IMAP_PASSWORD` | optional, read CVs and replies from a mailbox |
    | `ACUMBAMAIL_AUTH_TOKEN`, `ACUMBAMAIL_LIST_ID` | optional, sync contacts to Acumbamail |
 
+   > **Free (Hobby) plan**: Vercel only deploys commits whose author is the owner of the Vercel
+   > account. Commits must be signed with the email of your GitHub account
+   > (`git config user.email you@example.com`), otherwise the deployment fails at
+   > "Deploying outputs…" after a successful build.
+
 3. **Demo data**: the easiest way is `SEED_DEMO_DATA=true` above, which loads it during the first
    deployment. Or, from your computer, load the demo candidates into the online database once.
    This **deletes everything** in that database first, so never run it on real data:
