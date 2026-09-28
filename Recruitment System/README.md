@@ -88,6 +88,7 @@ histories (sent, opened, clicked, replied) and sequences in progress.
    | `CRON_SECRET` | a random text (protects the daily email job) |
    | `APP_TIMEZONE` | optional, the team's time zone (default `Europe/Paris`) |
    | `SHOW_DEMO_LOGINS` | `true` only while showing demo data; leave it off once real data is in |
+   | `SEED_DEMO_DATA` | `true` to load the demo data during the first deployment (only when the database has no user yet, so it never erases anything) |
    | `INTAKE_API_KEY` | optional, turns on the import API |
    | `OPENAI_API_KEY`, `OPENAI_MODEL` | optional, real AI analysis |
    | `SMTP_URL`, `EMAIL_FROM` | optional, real email sending |
@@ -95,7 +96,8 @@ histories (sent, opened, clicked, replied) and sequences in progress.
    | `IMAP_HOST`, `IMAP_USER`, `IMAP_PASSWORD` | optional, read CVs and replies from a mailbox |
    | `ACUMBAMAIL_AUTH_TOKEN`, `ACUMBAMAIL_LIST_ID` | optional, sync contacts to Acumbamail |
 
-3. **Demo data**: from your computer, load the demo candidates into the online database once.
+3. **Demo data**: the easiest way is `SEED_DEMO_DATA=true` above, which loads it during the first
+   deployment. Or, from your computer, load the demo candidates into the online database once.
    This **deletes everything** in that database first, so never run it on real data:
 
    ```bash
